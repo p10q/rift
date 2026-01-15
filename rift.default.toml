@@ -302,7 +302,9 @@ comb1 = "Alt + Shift"
 # - move_window_to_workspace = N
 # - create_workspace
 # - switch_to_last_workspace
-# - move_focus = "left"|"right"|"up"|"down"
+# - next_window / prev_window            # Cycle through windows at the same level (siblings, stays within stacks)
+# - ascend / descend                     # Move up/down the container hierarchy
+# - move_focus = "left"|"right"|"up"|"down"  # Spatial navigation (can cross hierarchy levels)
 # - move_node = "left"|"right"|"up"|"down"
 # - join_window = "left"|"right"|"up"|"down"
 # - stack_windows / unstack_windows / unjoin_windows
@@ -317,6 +319,16 @@ comb1 = "Alt + Shift"
 
 "Alt + Z" = "toggle_space_activated"
 
+# Cycle through siblings at current level (stays within stacks)
+# Uncomment to enable:
+# "Alt + N" = "next_window"
+# "Alt + P" = "prev_window"
+
+# Navigate container hierarchy
+# "Alt + U" = "ascend"    # Move selection UP to parent container
+# "Alt + I" = "descend"   # Move selection DOWN into child container
+
+# Spatial navigation (existing behavior, can cross hierarchy)
 "Alt + H" = { move_focus = "left" }
 "Alt + J" = { move_focus = "down" }
 "Alt + K" = { move_focus = "up" }

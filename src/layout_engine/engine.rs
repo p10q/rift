@@ -963,32 +963,82 @@ impl LayoutEngine {
                 EventResponse::default()
             }
 
-            LayoutCommand::NextWindow => self.move_focus_internal(
-                space,
-                visible_spaces,
-                visible_space_centers,
-                Direction::Right,
-                is_floating,
-            ),
-            LayoutCommand::PrevWindow => self.move_focus_internal(
-                space,
-                visible_spaces,
-                visible_space_centers,
-                Direction::Left,
-                is_floating,
-            ),
+            LayoutCommand::NextWindow => {
+                if is_floating {
+                    // Keep existing floating window cycling logic
+                    return self.move_focus_internal(
+                        space,
+                        visible_spaces,
+                        visible_space_centers,
+                        Direction::Right,
+                        is_floating,
+                    );
+                }
+                
+                let layout = self.layout(space);
+                let (focus_window, raise_windows) = self.tree.next_sibling_window(layout);
+                
+                if let Some(wid) = focus_window {
+                    EventResponse {
+                        raise_windows,
+                        focus_window: Some(wid),
+                    }
+                } else {
+                    EventResponse::default()
+                }
+            }
+            LayoutCommand::PrevWindow => {
+                if is_floating {
+                    // Keep existing floating window cycling logic
+                    return self.move_focus_internal(
+                        space,
+                        visible_spaces,
+                        visible_space_centers,
+                        Direction::Left,
+                        is_floating,
+                    );
+                }
+                
+                let layout = self.layout(space);
+                let (focus_window, raise_windows) = self.tree.prev_sibling_window(layout);
+                
+                if let Some(wid) = focus_window {
+                    EventResponse {
+                        raise_windows,
+                        focus_window: Some(wid),
+                    }
+                } else {
+                    EventResponse::default()
+                }
+            }
             LayoutCommand::MoveFocus(direction) => {
                 debug!(
                     "MoveFocus command received, direction: {:?}, is_floating: {}",
                     direction, is_floating
                 );
-                return self.move_focus_internal(
-                    space,
-                    visible_spaces,
-                    visible_space_centers,
-                    direction,
-                    is_floating,
-                );
+                
+                if is_floating {
+                    return self.move_focus_internal(
+                        space,
+                        visible_spaces,
+                        visible_space_centers,
+                        direction,
+                        is_floating,
+                    );
+                }
+                
+                // Use level-restricted focus movement for tiled windows
+                let layout = self.layout(space);
+                let (focus_window, raise_windows) = self.tree.move_focus_level_restricted(layout, direction);
+                
+                if let Some(wid) = focus_window {
+                    EventResponse {
+                        raise_windows,
+                        focus_window: Some(wid),
+                    }
+                } else {
+                    EventResponse::default()
+                }
             }
             LayoutCommand::Ascend => {
                 if is_floating {
@@ -1003,17 +1053,8 @@ impl LayoutEngine {
             }
             LayoutCommand::MoveNode(direction) => {
                 self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
-                if !self.tree.move_selection(layout, direction) {
-                    if let Some(new_space) = self.next_space_for_direction(
-                        space,
-                        direction,
-                        visible_spaces,
-                        visible_space_centers,
-                    ) {
-                        let new_layout = self.layout(new_space);
-                        self.tree.move_selection_to_layout_after_selection(layout, new_layout);
-                    }
-                }
+                // Use level-restricted movement - only move within current level
+                self.tree.move_selection_level_restricted(layout, direction);
                 EventResponse::default()
             }
             LayoutCommand::ToggleFullscreen => {
@@ -1047,7 +1088,8 @@ impl LayoutEngine {
             | LayoutCommand::SwitchToLastWorkspace => EventResponse::default(),
             LayoutCommand::JoinWindow(direction) => {
                 self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
-                self.tree.join_selection_with_direction(layout, direction);
+                // Use level-restricted joining - only join with siblings at current level
+                self.tree.join_selection_with_direction_level_restricted(layout, direction);
                 EventResponse::default()
             }
             LayoutCommand::ToggleStack => {

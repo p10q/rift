@@ -27,7 +27,6 @@ type OSType = FourCharCode;
 #[allow(dead_code)]
 #[allow(non_snake_case)]
 #[repr(C, packed(2))]
-#[derive(Default)]
 struct ProcessInfoRec {
     processInfoLength: u32,
     processName: *const u8,
@@ -42,6 +41,26 @@ struct ProcessInfoRec {
     processLaunchDate: u32,
     processActiveTime: u32,
     processAppRef: *const u8,
+}
+
+impl Default for ProcessInfoRec {
+    fn default() -> Self {
+        Self {
+            processInfoLength: 0,
+            processName: std::ptr::null(),
+            processNumber: ProcessSerialNumber::default(),
+            processType: 0,
+            processSignature: 0,
+            processMode: 0,
+            processLocation: std::ptr::null(),
+            processSize: 0,
+            processFreeMem: 0,
+            processLauncher: ProcessSerialNumber::default(),
+            processLaunchDate: 0,
+            processActiveTime: 0,
+            processAppRef: std::ptr::null(),
+        }
+    }
 }
 const _: () = if size_of::<ProcessInfoRec>() != 72 {
     panic!("unexpected size")

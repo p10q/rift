@@ -36,6 +36,13 @@ pub trait LayoutSystem: Serialize + for<'de> Deserialize<'de> {
         layout: LayoutId,
         direction: Direction,
     ) -> (Option<WindowId>, Vec<WindowId>);
+    fn move_focus_level_restricted(
+        &mut self,
+        layout: LayoutId,
+        direction: Direction,
+    ) -> (Option<WindowId>, Vec<WindowId>);
+    fn next_sibling_window(&mut self, layout: LayoutId) -> (Option<WindowId>, Vec<WindowId>);
+    fn prev_sibling_window(&mut self, layout: LayoutId) -> (Option<WindowId>, Vec<WindowId>);
     fn window_in_direction(&self, layout: LayoutId, direction: Direction) -> Option<WindowId>;
     fn add_window_after_selection(&mut self, layout: LayoutId, wid: WindowId);
     fn remove_window(&mut self, wid: WindowId);
@@ -57,6 +64,7 @@ pub trait LayoutSystem: Serialize + for<'de> Deserialize<'de> {
     fn swap_windows(&mut self, layout: LayoutId, a: WindowId, b: WindowId) -> bool;
 
     fn move_selection(&mut self, layout: LayoutId, direction: Direction) -> bool;
+    fn move_selection_level_restricted(&mut self, layout: LayoutId, direction: Direction) -> bool;
     fn move_selection_to_layout_after_selection(
         &mut self,
         from_layout: LayoutId,
@@ -68,6 +76,7 @@ pub trait LayoutSystem: Serialize + for<'de> Deserialize<'de> {
     fn toggle_fullscreen_within_gaps_of_selection(&mut self, layout: LayoutId) -> Vec<WindowId>;
 
     fn join_selection_with_direction(&mut self, layout: LayoutId, direction: Direction);
+    fn join_selection_with_direction_level_restricted(&mut self, layout: LayoutId, direction: Direction);
     fn apply_stacking_to_parent_of_selection(
         &mut self,
         layout: LayoutId,

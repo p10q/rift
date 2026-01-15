@@ -300,7 +300,7 @@ impl Timer {
     }
 
     /// Convenience method to get the next timer event.
-    pub fn next(&mut self) -> impl Future<Output = Option<()>> {
+    pub fn next(&mut self) -> impl Future<Output = Option<()>> + use<'_> {
         tokio_stream::StreamExt::next(self)
     }
 }

@@ -1,3 +1,4 @@
+#![feature(let_chains)]
 #![allow(stable_features)]
 #![allow(non_upper_case_globals)]
 #![allow(invalid_reference_casting)]

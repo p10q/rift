@@ -438,12 +438,20 @@ impl LayoutSystem for TraditionalLayoutSystem {
     }
 
     fn descend_selection(&mut self, layout: LayoutId) -> bool {
-        if let Some(child) =
-            self.tree.data.selection.last_selection(self.map(), self.selection(layout))
-        {
+        let selection = self.selection(layout);
+        
+        // Try to use the last selection within this container
+        if let Some(child) = self.tree.data.selection.last_selection(self.map(), selection) {
             self.select(child);
             return true;
         }
+        
+        // If no last selection, descend into first child (useful when just navigated to container)
+        if let Some(first_child) = selection.first_child(self.map()) {
+            self.select(first_child);
+            return true;
+        }
+        
         false
     }
 
@@ -480,6 +488,125 @@ impl LayoutSystem for TraditionalLayoutSystem {
         } else {
             (None, vec![])
         }
+    }
+
+    fn move_focus_level_restricted(
+        &mut self,
+        layout: LayoutId,
+        direction: Direction,
+    ) -> (Option<WindowId>, Vec<WindowId>) {
+        let selection = self.selection(layout);
+        
+        // Only move to siblings at the current level, don't traverse up/down hierarchy
+        if let Some(sibling) = self.move_over(selection, direction) {
+            // Select the sibling
+            self.select(sibling);
+            let raise_windows = self.visible_windows_under_internal(sibling);
+            
+            // If it's a window, focus it
+            if let Some(target_window) = self.tree.data.window.at(sibling) {
+                return (Some(target_window), raise_windows);
+            } else {
+                // It's a container - just select it, don't descend
+                return (None, raise_windows);
+            }
+        }
+        
+        (None, vec![])
+    }
+
+    fn next_sibling_window(
+        &mut self,
+        layout: LayoutId,
+    ) -> (Option<WindowId>, Vec<WindowId>) {
+        let selection = self.selection(layout);
+        
+        // First try to find next sibling at current level
+        let next_sibling = selection.next_sibling(self.map());
+        if let Some(next_sibling) = next_sibling {
+            // Select the sibling (whether it's a window or container)
+            self.select(next_sibling);
+            let raise_windows = self.visible_windows_under_internal(next_sibling);
+            
+            // If it's a window, focus it
+            if let Some(target_window) = self.tree.data.window.at(next_sibling) {
+                return (Some(target_window), raise_windows);
+            } else {
+                // It's a container - just select it, don't descend
+                // User needs to explicitly use 'descend' to go into it
+                return (None, raise_windows);
+            }
+        }
+        
+        // If no next sibling, wrap around to first sibling if we have a parent
+        let parent = selection.parent(self.map());
+        if let Some(parent) = parent {
+            let first_child = parent.first_child(self.map());
+            if let Some(first_child) = first_child {
+                if first_child != selection {
+                    // Select the sibling (whether it's a window or container)
+                    self.select(first_child);
+                    let raise_windows = self.visible_windows_under_internal(first_child);
+                    
+                    // If it's a window, focus it
+                    if let Some(target_window) = self.tree.data.window.at(first_child) {
+                        return (Some(target_window), raise_windows);
+                    } else {
+                        // It's a container - just select it, don't descend
+                        return (None, raise_windows);
+                    }
+                }
+            }
+        }
+        
+        (None, vec![])
+    }
+
+    fn prev_sibling_window(
+        &mut self,
+        layout: LayoutId,
+    ) -> (Option<WindowId>, Vec<WindowId>) {
+        let selection = self.selection(layout);
+        
+        // First try to find previous sibling at current level
+        let prev_sibling = selection.prev_sibling(self.map());
+        if let Some(prev_sibling) = prev_sibling {
+            // Select the sibling (whether it's a window or container)
+            self.select(prev_sibling);
+            let raise_windows = self.visible_windows_under_internal(prev_sibling);
+            
+            // If it's a window, focus it
+            if let Some(target_window) = self.tree.data.window.at(prev_sibling) {
+                return (Some(target_window), raise_windows);
+            } else {
+                // It's a container - just select it, don't descend
+                // User needs to explicitly use 'descend' to go into it
+                return (None, raise_windows);
+            }
+        }
+        
+        // If no prev sibling, wrap around to last sibling if we have a parent
+        let parent = selection.parent(self.map());
+        if let Some(parent) = parent {
+            let siblings: Vec<_> = parent.children(self.map()).collect();
+            if let Some(&last_child) = siblings.last() {
+                if last_child != selection {
+                    // Select the sibling (whether it's a window or container)
+                    self.select(last_child);
+                    let raise_windows = self.visible_windows_under_internal(last_child);
+                    
+                    // If it's a window, focus it
+                    if let Some(target_window) = self.tree.data.window.at(last_child) {
+                        return (Some(target_window), raise_windows);
+                    } else {
+                        // It's a container - just select it, don't descend
+                        return (None, raise_windows);
+                    }
+                }
+            }
+        }
+        
+        (None, vec![])
     }
 
     fn window_in_direction(&self, layout: LayoutId, direction: Direction) -> Option<WindowId> {
@@ -604,6 +731,26 @@ impl LayoutSystem for TraditionalLayoutSystem {
         self.move_node(layout, selection, direction)
     }
 
+    fn move_selection_level_restricted(&mut self, layout: LayoutId, direction: Direction) -> bool {
+        let selection = self.selection(layout);
+        
+        // Only swap with siblings at the current level
+        if let Some(sibling) = self.move_over(selection, direction) {
+            // Swap positions with the sibling
+            match direction {
+                Direction::Right | Direction::Down => {
+                    selection.detach(&mut self.tree).insert_after(sibling);
+                }
+                Direction::Left | Direction::Up => {
+                    selection.detach(&mut self.tree).insert_before(sibling);
+                }
+            }
+            return true;
+        }
+        
+        false
+    }
+
     fn move_selection_to_layout_after_selection(
         &mut self,
         from_layout: LayoutId,
@@ -651,6 +798,15 @@ impl LayoutSystem for TraditionalLayoutSystem {
             self.visible_windows_under_internal(node)
         } else {
             vec![]
+        }
+    }
+
+    fn join_selection_with_direction_level_restricted(&mut self, layout: LayoutId, direction: Direction) {
+        let selection = self.selection(layout);
+        
+        // Only join with direct siblings at the current level
+        if let Some(target) = self.move_over(selection, direction) {
+            self.perform_natural_join(layout, selection, target, direction);
         }
     }
 

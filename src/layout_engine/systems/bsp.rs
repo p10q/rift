@@ -688,6 +688,134 @@ impl LayoutSystem for BspLayoutSystem {
         (focus, raise_windows)
     }
 
+    fn move_focus_level_restricted(
+        &mut self,
+        layout: LayoutId,
+        direction: Direction,
+    ) -> (Option<WindowId>, Vec<WindowId>) {
+        let raise_windows = self.visible_windows_in_layout(layout);
+        if raise_windows.is_empty() {
+            return (None, vec![]);
+        }
+        
+        let Some(current_sel) = self.selection_of_layout(layout) else {
+            return (None, vec![]);
+        };
+        let current_leaf = self.descend_to_leaf(current_sel);
+        
+        // Only check parent for same-level siblings, don't traverse up hierarchy
+        let parent = current_leaf.parent(&self.tree.map);
+        if let Some(parent) = parent {
+            if let Some(NodeKind::Split { orientation, .. }) = self.kind.get(parent) {
+                if *orientation == direction.orientation() {
+                    let sibling = match direction {
+                        Direction::Left | Direction::Up => current_leaf.prev_sibling(&self.tree.map),
+                        Direction::Right | Direction::Down => current_leaf.next_sibling(&self.tree.map),
+                    };
+                    
+                    if let Some(sibling) = sibling {
+                        let target_leaf = self.descend_to_leaf(sibling);
+                        self.tree.data.selection.select(&self.tree.map, target_leaf);
+                        if let Some(NodeKind::Leaf { window, .. }) = self.kind.get(target_leaf) {
+                            if let Some(wid) = window {
+                                return (Some(*wid), raise_windows);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        (None, vec![])
+    }
+
+    fn next_sibling_window(
+        &mut self,
+        layout: LayoutId,
+    ) -> (Option<WindowId>, Vec<WindowId>) {
+        let raise_windows = self.visible_windows_in_layout(layout);
+        if raise_windows.is_empty() {
+            return (None, vec![]);
+        }
+        
+        let Some(current_sel) = self.selection_of_layout(layout) else {
+            return (None, vec![]);
+        };
+        let current_leaf = self.descend_to_leaf(current_sel);
+        
+        // Try to find next sibling
+        if let Some(next_sibling) = current_leaf.next_sibling(&self.tree.map) {
+            let target_leaf = self.descend_to_leaf(next_sibling);
+            self.tree.data.selection.select(&self.tree.map, target_leaf);
+            if let Some(NodeKind::Leaf { window, .. }) = self.kind.get(target_leaf) {
+                if let Some(wid) = window {
+                    return (Some(*wid), raise_windows);
+                }
+            }
+        }
+        
+        // Wrap around to first sibling if no next sibling
+        if let Some(parent) = current_leaf.parent(&self.tree.map) {
+            if let Some(first_child) = parent.first_child(&self.tree.map) {
+                if first_child != current_leaf {
+                    let target_leaf = self.descend_to_leaf(first_child);
+                    self.tree.data.selection.select(&self.tree.map, target_leaf);
+                    if let Some(NodeKind::Leaf { window, .. }) = self.kind.get(target_leaf) {
+                        if let Some(wid) = window {
+                            return (Some(*wid), raise_windows);
+                        }
+                    }
+                }
+            }
+        }
+        
+        (None, vec![])
+    }
+
+    fn prev_sibling_window(
+        &mut self,
+        layout: LayoutId,
+    ) -> (Option<WindowId>, Vec<WindowId>) {
+        let raise_windows = self.visible_windows_in_layout(layout);
+        if raise_windows.is_empty() {
+            return (None, vec![]);
+        }
+        
+        let Some(current_sel) = self.selection_of_layout(layout) else {
+            return (None, vec![]);
+        };
+        let current_leaf = self.descend_to_leaf(current_sel);
+        
+        // Try to find previous sibling
+        if let Some(prev_sibling) = current_leaf.prev_sibling(&self.tree.map) {
+            let target_leaf = self.descend_to_leaf(prev_sibling);
+            self.tree.data.selection.select(&self.tree.map, target_leaf);
+            if let Some(NodeKind::Leaf { window, .. }) = self.kind.get(target_leaf) {
+                if let Some(wid) = window {
+                    return (Some(*wid), raise_windows);
+                }
+            }
+        }
+        
+        // Wrap around to last sibling if no prev sibling
+        if let Some(parent) = current_leaf.parent(&self.tree.map) {
+            let siblings: Vec<_> = parent.children(&self.tree.map).collect();
+            if let Some(&last_child) = siblings.last() {
+                if last_child != current_leaf {
+                    let target_leaf = self.descend_to_leaf(last_child);
+                    self.tree.data.selection.select(&self.tree.map, target_leaf);
+                    if let Some(NodeKind::Leaf { window, .. }) = self.kind.get(target_leaf) {
+                        if let Some(wid) = window {
+                            return (Some(*wid), raise_windows);
+                        }
+                    }
+                }
+            }
+        }
+        
+        (None, vec![])
+    }
+
     fn window_in_direction(&self, layout: LayoutId, direction: Direction) -> Option<WindowId> {
         self.layouts
             .get(layout)
@@ -872,6 +1000,62 @@ impl LayoutSystem for BspLayoutSystem {
         true
     }
 
+    fn move_selection_level_restricted(&mut self, layout: LayoutId, direction: Direction) -> bool {
+        let Some(sel) = self.selection_of_layout(layout) else {
+            return false;
+        };
+        let sel_leaf = self.descend_to_leaf(sel);
+        
+        // Only check parent for same-level siblings
+        let parent = sel_leaf.parent(&self.tree.map);
+        let Some(parent) = parent else {
+            return false;
+        };
+        
+        if let Some(NodeKind::Split { orientation, .. }) = self.kind.get(parent) {
+            if *orientation != direction.orientation() {
+                return false;
+            }
+            
+            let sibling = match direction {
+                Direction::Left | Direction::Up => sel_leaf.prev_sibling(&self.tree.map),
+                Direction::Right | Direction::Down => sel_leaf.next_sibling(&self.tree.map),
+            };
+            
+            let Some(neighbor_leaf) = sibling else {
+                return false;
+            };
+            
+            // Swap windows
+            let (mut a_window, mut b_window) = (None, None);
+            if let Some(NodeKind::Leaf { window, .. }) = self.kind.get_mut(sel_leaf) {
+                a_window = *window;
+            }
+            if let Some(NodeKind::Leaf { window, .. }) = self.kind.get_mut(neighbor_leaf) {
+                b_window = *window;
+            }
+            if a_window.is_none() && b_window.is_none() {
+                return false;
+            }
+            if let Some(NodeKind::Leaf { window, .. }) = self.kind.get_mut(sel_leaf) {
+                *window = b_window;
+            }
+            if let Some(NodeKind::Leaf { window, .. }) = self.kind.get_mut(neighbor_leaf) {
+                *window = a_window;
+            }
+            if let Some(w) = a_window {
+                self.window_to_node.insert(w, neighbor_leaf);
+            }
+            if let Some(w) = b_window {
+                self.window_to_node.insert(w, sel_leaf);
+            }
+            self.tree.data.selection.select(&self.tree.map, neighbor_leaf);
+            return true;
+        }
+        
+        false
+    }
+
     fn swap_windows(&mut self, layout: LayoutId, a: WindowId, b: WindowId) -> bool {
         let Some(&node_a) = self.window_to_node.get(&a) else {
             return false;
@@ -1038,6 +1222,53 @@ impl LayoutSystem for BspLayoutSystem {
                 break;
             }
             current = parent;
+        }
+    }
+
+    fn join_selection_with_direction_level_restricted(&mut self, layout: LayoutId, direction: Direction) {
+        let Some(sel) = self.selection_of_layout(layout) else {
+            return;
+        };
+        let sel_leaf = self.descend_to_leaf(sel);
+        
+        // Only check immediate parent for same-level siblings
+        let Some(parent) = sel_leaf.parent(&self.tree.map) else {
+            return;
+        };
+        
+        if let Some(NodeKind::Split { orientation, .. }) = self.kind.get(parent) {
+            if *orientation != direction.orientation() {
+                return;
+            }
+            
+            let sibling = match direction {
+                Direction::Left | Direction::Up => sel_leaf.prev_sibling(&self.tree.map),
+                Direction::Right | Direction::Down => sel_leaf.next_sibling(&self.tree.map),
+            };
+            
+            let Some(_neighbor) = sibling else {
+                return;
+            };
+            
+            // Merge the two siblings into a single leaf
+            if let Some(grandparent) = parent.parent(&self.tree.map) {
+                let mut windows = Vec::new();
+                self.collect_windows_under(parent, &mut windows);
+
+                let _ = parent.detach(&mut self.tree);
+                self.kind.remove(parent);
+
+                if let Some(first_window) = windows.first() {
+                    let new_leaf = self.make_leaf(Some(*first_window));
+                    new_leaf.detach(&mut self.tree).push_back(grandparent);
+
+                    for window in windows {
+                        self.window_to_node.insert(window, new_leaf);
+                    }
+
+                    self.tree.data.selection.select(&self.tree.map, new_leaf);
+                }
+            }
         }
     }
 
