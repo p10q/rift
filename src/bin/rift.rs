@@ -66,6 +66,10 @@ struct Cli {
     #[arg(long, value_name = "PATH")]
     config: Option<PathBuf>,
 
+    /// Print tree structure after each command (debug mode).
+    #[arg(long)]
+    debug: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -165,6 +169,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
         stack_line_tx.clone(),
         Some((wnd_tx.clone(), window_tx_store.clone())),
         opt.one,
+        opt.debug,
     );
 
     let config_tx =

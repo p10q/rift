@@ -103,6 +103,15 @@ impl CommandEventHandler {
         };
 
         reactor.handle_layout_response(response, workspace_space);
+        
+        // Auto-print tree in debug mode
+        if reactor.debug_mode {
+            for screen in &reactor.space_manager.screens {
+                if let Some(space) = screen.space {
+                    reactor.layout_manager.layout_engine.debug_tree_desc(space, "", true);
+                }
+            }
+        }
     }
 
     pub fn handle_command_metrics(_reactor: &mut Reactor, cmd: MetricsCommand) {

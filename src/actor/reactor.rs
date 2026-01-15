@@ -369,6 +369,7 @@ pub enum RefocusState {
 pub struct Reactor {
     pub config: Config,
     pub one_space: bool,
+    pub debug_mode: bool,
     app_manager: managers::AppManager,
     layout_manager: managers::LayoutManager,
     window_manager: managers::WindowManager,
@@ -470,6 +471,7 @@ impl Reactor {
         stack_line_tx: stack_line::Sender,
         window_notify: Option<(crate::actor::window_notify::Sender, WindowTxStore)>,
         one_space: bool,
+        debug_mode: bool,
     ) -> Sender {
         let (events_tx, events) = actor::channel();
         let events_tx_clone = events_tx.clone();
@@ -483,6 +485,7 @@ impl Reactor {
                     broadcast_tx,
                     window_notify,
                     one_space,
+                    debug_mode,
                 );
                 reactor.communication_manager.event_tap_tx = Some(event_tap_tx);
                 reactor.menu_manager.menu_tx = Some(menu_tx);
@@ -501,6 +504,7 @@ impl Reactor {
         broadcast_tx: BroadcastSender,
         window_notify: Option<(crate::actor::window_notify::Sender, WindowTxStore)>,
         one_space: bool,
+        debug_mode: bool,
     ) -> Reactor {
         // FIXME: Remove apps that are no longer running from restored state.
         record.start(&config, &layout_engine);
@@ -512,6 +516,7 @@ impl Reactor {
         Reactor {
             config: config.clone(),
             one_space,
+            debug_mode,
             app_manager: managers::AppManager::new(),
             layout_manager: managers::LayoutManager { layout_engine },
             window_manager: managers::WindowManager {
