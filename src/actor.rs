@@ -7,6 +7,7 @@ pub mod broadcast;
 pub mod config;
 pub mod config_watcher;
 pub mod corner_indicator;
+pub mod debug_tree;
 pub mod drag_swap;
 pub mod event_tap;
 pub mod menu_bar;

@@ -595,6 +595,66 @@ impl LayoutSystem for BspLayoutSystem {
         }
     }
 
+    fn draw_tree_with_details<F>(&self, layout: LayoutId, window_info_fn: F) -> String
+    where
+        F: Fn(WindowId) -> Option<crate::layout_engine::systems::WindowDetails>,
+    {
+        fn write_node_with_details<F>(
+            this: &BspLayoutSystem,
+            node: NodeId,
+            out: &mut String,
+            indent: usize,
+            window_info_fn: &F,
+        ) where
+            F: Fn(WindowId) -> Option<crate::layout_engine::systems::WindowDetails>,
+        {
+            for _ in 0..indent {
+                out.push_str("  ");
+            }
+            match this.kind.get(node) {
+                Some(NodeKind::Leaf { window, .. }) => {
+                    if let Some(wid) = window {
+                        if let Some(details) = window_info_fn(*wid) {
+                            let bundle = details.bundle_id.as_deref().unwrap_or("unknown");
+                            let title = if details.title.len() > 40 {
+                                format!("{}...", &details.title[..37])
+                            } else {
+                                details.title.clone()
+                            };
+                            out.push_str(&format!(
+                                "Leaf {:?} | \"{}\" ({}) [{:.0}x{:.0}]\n",
+                                wid, title, bundle,
+                                details.frame.size.width, details.frame.size.height
+                            ));
+                        } else {
+                            out.push_str(&format!("Leaf {:?}\n", wid));
+                        }
+                    } else {
+                        out.push_str("Leaf <empty>\n");
+                    }
+                }
+                Some(NodeKind::Split { orientation, ratio }) => {
+                    out.push_str(&format!("Split {:?} {:.2}\n", orientation, ratio));
+                    let mut it = node.children(&this.tree.map);
+                    if let Some(first) = it.next() {
+                        write_node_with_details(this, first, out, indent + 1, window_info_fn);
+                    }
+                    if let Some(second) = it.next() {
+                        write_node_with_details(this, second, out, indent + 1, window_info_fn);
+                    }
+                }
+                None => {}
+            }
+        }
+        if let Some(state) = self.layouts.get(layout).copied() {
+            let mut s = String::new();
+            write_node_with_details(self, state.root, &mut s, 0, &window_info_fn);
+            s
+        } else {
+            "<empty bsp>".to_string()
+        }
+    }
+
     fn calculate_layout(
         &self,
         layout: LayoutId,

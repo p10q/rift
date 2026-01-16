@@ -15,6 +15,38 @@ use crate::layout_engine::{EventResponse, LayoutCommand, LayoutEvent};
 use crate::sys::screen::{SpaceId, order_visible_spaces_by_position};
 use crate::sys::window_server::{self as window_server, WindowServerId};
 
+pub(crate) fn generate_debug_tree_text(reactor: &Reactor) -> String {
+    let mut output = String::new();
+    output.push_str("=== Rift Debug Tree ===\n\n");
+    
+    for screen in &reactor.space_manager.screens {
+        if let Some(space) = screen.space {
+            output.push_str(&format!("Space: {:?}\n", space));
+            output.push_str(&format!("Screen: {}x{}\n\n", 
+                screen.frame.size.width, screen.frame.size.height));
+            
+            // Get tree structure with window details
+            let tree = reactor.layout_manager.layout_engine.get_tree_text_with_details(
+                space,
+                |wid| {
+                    reactor.window_manager.windows.get(&wid).map(|w| {
+                        crate::layout_engine::systems::WindowDetails {
+                            title: w.title.clone(),
+                            bundle_id: w.bundle_id.clone(),
+                            frame: w.frame_monotonic,
+                        }
+                    })
+                }
+            );
+            
+            output.push_str(&tree);
+            output.push_str("\n\n");
+        }
+    }
+    
+    output
+}
+
 pub struct CommandEventHandler;
 
 impl CommandEventHandler {
@@ -147,6 +179,12 @@ impl CommandEventHandler {
             }
         }
 
+        if let Some(tx) = &reactor.communication_manager.debug_tree_tx {
+            if let Err(e) = tx.try_send(crate::actor::debug_tree::Event::ConfigUpdated(reactor.config.clone())) {
+                warn!("Failed to send config update to debug tree: {}", e);
+            }
+        }
+
         if let Some(tx) = &reactor.menu_manager.menu_tx {
             if let Err(e) = tx.try_send(menu_bar::Event::ConfigUpdated(reactor.config.clone())) {
                 warn!("Failed to send config update to menu bar: {}", e);
@@ -163,9 +201,22 @@ impl CommandEventHandler {
     }
 
     pub fn handle_command_reactor_debug(reactor: &mut Reactor) {
+        // Still log to console
         for screen in &reactor.space_manager.screens {
             if let Some(space) = screen.space {
                 reactor.layout_manager.layout_engine.debug_tree_desc(space, "", true);
+            }
+        }
+        
+        // Generate rich tree text with window info
+        let tree_text = generate_debug_tree_text(reactor);
+        
+        // Toggle debug tree window
+        if let Some(tx) = &reactor.communication_manager.debug_tree_tx {
+            if let Err(e) = tx.try_send(crate::actor::debug_tree::Event::Toggle {
+                tree_text,
+            }) {
+                tracing::warn!("Failed to toggle debug tree window: {}", e);
             }
         }
     }

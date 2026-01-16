@@ -384,6 +384,8 @@ pub struct UiSettings {
     pub mission_control: MissionControlSettings,
     /// Enable visual corner indicators for selected nodes (windows and containers)
     pub corner_indicator_enabled: Option<bool>,
+    /// Enable debug tree visualization window
+    pub debug_tree_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]

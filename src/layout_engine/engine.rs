@@ -636,6 +636,21 @@ impl LayoutEngine {
         }
     }
 
+    pub fn get_tree_text_with_details<F>(&self, space: SpaceId, window_info_fn: F) -> String
+    where
+        F: Fn(WindowId) -> Option<super::systems::WindowDetails>,
+    {
+        if let Some(workspace_id) = self.virtual_workspace_manager.active_workspace(space) {
+            if let Some(layout) = self.workspace_layouts.active(space, workspace_id) {
+                self.tree.draw_tree_with_details(layout, window_info_fn)
+            } else {
+                format!("No layout for workspace {:?}", workspace_id)
+            }
+        } else {
+            format!("No active workspace for space {:?}", space)
+        }
+    }
+
     pub fn handle_event(&mut self, event: LayoutEvent) -> EventResponse {
         debug!(?event);
         match event {

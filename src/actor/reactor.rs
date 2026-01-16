@@ -470,6 +470,7 @@ impl Reactor {
         menu_tx: menu_bar::Sender,
         stack_line_tx: stack_line::Sender,
         corner_indicator_tx: corner_indicator::Sender,
+        debug_tree_tx: crate::actor::debug_tree::Sender,
         window_notify: Option<(crate::actor::window_notify::Sender, WindowTxStore)>,
         one_space: bool,
         debug_mode: bool,
@@ -492,6 +493,7 @@ impl Reactor {
                 reactor.menu_manager.menu_tx = Some(menu_tx);
                 reactor.communication_manager.stack_line_tx = Some(stack_line_tx);
                 reactor.communication_manager.corner_indicator_tx = Some(corner_indicator_tx);
+                reactor.communication_manager.debug_tree_tx = Some(debug_tree_tx);
                 reactor.communication_manager.events_tx = Some(events_tx_clone.clone());
                 Executor::run(reactor.run(events, events_tx_clone));
             })
@@ -557,6 +559,7 @@ impl Reactor {
                 event_tap_tx: None,
                 stack_line_tx: None,
                 corner_indicator_tx: None,
+                debug_tree_tx: None,
                 raise_manager_tx,
                 event_broadcaster: broadcast_tx,
                 wm_sender: None,

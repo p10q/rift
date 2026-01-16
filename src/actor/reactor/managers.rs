@@ -176,6 +176,7 @@ pub struct CommunicationManager {
     pub event_tap_tx: Option<event_tap::Sender>,
     pub stack_line_tx: Option<stack_line::Sender>,
     pub corner_indicator_tx: Option<corner_indicator::Sender>,
+    pub debug_tree_tx: Option<crate::actor::debug_tree::Sender>,
     pub raise_manager_tx: raise_manager::Sender,
     pub event_broadcaster: BroadcastSender,
     pub wm_sender: Option<wm_controller::Sender>,
@@ -375,6 +376,17 @@ impl LayoutManager {
                         tracing::warn!("Failed to send selection update to corner_indicator: {}", e);
                     }
                 }
+            }
+
+            // Handle debug_tree real-time updates
+            if let Some(tx) = &reactor.communication_manager.debug_tree_tx {
+                // Generate tree text for all screens
+                let tree_text = super::events::command::generate_debug_tree_text(reactor);
+                
+                // Send update - errors are expected and fine (window might be hidden)
+                let _ = tx.try_send(crate::actor::debug_tree::Event::Show {
+                    tree_text,
+                });
             }
 
             let suppress_animation = is_workspace_switch

@@ -407,6 +407,16 @@ impl LayoutSystem for TraditionalLayoutSystem {
         out
     }
 
+    fn draw_tree_with_details<F>(&self, layout: LayoutId, window_info_fn: F) -> String
+    where
+        F: Fn(WindowId) -> Option<crate::layout_engine::systems::WindowDetails>,
+    {
+        let tree = self.get_ascii_tree_with_details(self.root(layout), &window_info_fn);
+        let mut out = String::new();
+        ascii_tree::write_tree(&mut out, &tree).unwrap();
+        out
+    }
+
     fn calculate_layout(
         &self,
         layout: LayoutId,
@@ -1994,6 +2004,93 @@ impl TraditionalLayoutSystem {
         };
         let children: Vec<_> =
             node.children(&self.tree.map).map(|c| self.get_ascii_tree(c)).collect();
+        if children.is_empty() {
+            ascii_tree::Tree::Leaf(vec![desc])
+        } else {
+            ascii_tree::Tree::Node(desc, children)
+        }
+    }
+
+    fn get_ascii_tree_with_details<F>(&self, node: NodeId, window_info_fn: &F) -> ascii_tree::Tree
+    where
+        F: Fn(WindowId) -> Option<crate::layout_engine::systems::WindowDetails>,
+    {
+        let is_locally_selected = match node.parent(&self.tree.map) {
+            None => false,
+            Some(parent) => {
+                self.tree.data.selection.local_selection(&self.tree.map, parent) == Some(node)
+            }
+        };
+        
+        // Check if node is part of a selection range
+        let in_range = if let Some(_parent) = node.parent(&self.tree.map) {
+            if let Some((start, end)) = self.tree.data.selection.get_range(&self.tree.map, node) {
+                // Check if this node is between start and end
+                let mut current = start;
+                let mut found = current == node;
+                while !found && current != end {
+                    if let Some(next) = current.next_sibling(&self.tree.map) {
+                        current = next;
+                        found = current == node;
+                    } else {
+                        break;
+                    }
+                }
+                if found {
+                    Some((start, end))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        let status = if is_locally_selected {
+            "☒ "
+        } else if let Some((start, end)) = in_range {
+            if node == start && node == end {
+                "◆ "  // Single node in range
+            } else if node == start {
+                "⟦ "  // Range start
+            } else if node == end {
+                "⟧ "  // Range end
+            } else {
+                "◆ "  // Middle of range
+            }
+        } else if node.parent(&self.tree.map).is_none() {
+            ""  // Root
+        } else {
+            "☐ "  // Not selected
+        };
+        
+        let desc = format!("{status}{node:?}");
+        let desc = match self.window_at(node) {
+            Some(wid) => {
+                let layout_info = self.tree.data.layout.debug(node, false);
+                if let Some(details) = window_info_fn(wid) {
+                    let bundle = details.bundle_id.as_deref().unwrap_or("unknown");
+                    let title = if details.title.len() > 40 {
+                        format!("{}...", &details.title[..37])
+                    } else {
+                        details.title.clone()
+                    };
+                    format!("{desc} {:?} {} | \"{}\" ({}) [{:.0}x{:.0}]", 
+                        wid, layout_info, title, bundle,
+                        details.frame.size.width, details.frame.size.height)
+                } else {
+                    format!("{desc} {:?} {}", wid, layout_info)
+                }
+            }
+            None => format!("{desc} {}", self.tree.data.layout.debug(node, true)),
+        };
+        
+        let children: Vec<_> = node.children(&self.tree.map)
+            .map(|c| self.get_ascii_tree_with_details(c, window_info_fn))
+            .collect();
+            
         if children.is_empty() {
             ascii_tree::Tree::Leaf(vec![desc])
         } else {

@@ -7,6 +7,13 @@ use crate::layout_engine::{Direction, LayoutKind};
 
 slotmap::new_key_type! { pub struct LayoutId; }
 
+#[derive(Debug, Clone)]
+pub struct WindowDetails {
+    pub title: String,
+    pub bundle_id: Option<String>,
+    pub frame: CGRect,
+}
+
 #[enum_dispatch]
 pub trait LayoutSystem: Serialize + for<'de> Deserialize<'de> {
     fn create_layout(&mut self) -> LayoutId;
@@ -14,6 +21,10 @@ pub trait LayoutSystem: Serialize + for<'de> Deserialize<'de> {
     fn remove_layout(&mut self, layout: LayoutId);
 
     fn draw_tree(&self, layout: LayoutId) -> String;
+
+    fn draw_tree_with_details<F>(&self, layout: LayoutId, window_info_fn: F) -> String
+    where
+        F: Fn(WindowId) -> Option<WindowDetails>;
 
     fn calculate_layout(
         &self,
