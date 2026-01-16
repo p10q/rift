@@ -141,10 +141,11 @@ wm_alt = "Ctrl + Alt + Cmd"
 # ------------------------------------------------------------------------------
 # Join windows - Arrow keys
 # ------------------------------------------------------------------------------
-"wm_shift + H" = { join_window = "left" }
-"wm_shift + J" = { join_window = "down" }
-"wm_shift + K" = { join_window = "up" }
-"wm_shift + L" = { join_window = "right" }
+#"wm + Left" = { join_window = "left" }
+#"wm + Down" = { join_window = "down" }
+#"wm + Up" = { join_window = "up" }
+#"wm + Right" = { join_window = "right" }
+
 
 # ------------------------------------------------------------------------------
 # Workspaces - Switch
@@ -206,6 +207,23 @@ wm_alt = "Ctrl + Alt + Cmd"
 # ------------------------------------------------------------------------------
 "wm + A" = "ascend"
 "wm + D" = "descend"
+
+# ------------------------------------------------------------------------------
+# Grouping and ungrouping
+# ------------------------------------------------------------------------------
+#"wm + Up" = "ungroup_selection"
+"wm + Up" = "ungroup_siblings"
+"wm + Right" = "move_selection_to_sibling_next"
+"wm + Left" = "move_selection_to_sibling_prev"
+"wm + Down" = "group_selection"
+
+
+"wm_shift + J" = "decrease_selection_left"
+"wm_shift + L" = "increase_selection_right"
+"wm_shift + H" = "increase_selection_left"
+"wm_shift + K" = "decrease_selection_right"
+
+
 
 # ------------------------------------------------------------------------------
 # Mission Control

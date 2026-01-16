@@ -40,6 +40,10 @@ pub enum LayoutCommand {
     UngroupSelection,
     UngroupSiblings,
     GroupSelection,
+    IncreaseSelectionLeft,
+    IncreaseSelectionRight,
+    DecreaseSelectionLeft,
+    DecreaseSelectionRight,
     MoveSelectionToSiblingNext,
     MoveSelectionToSiblingPrev,
     MoveNode(Direction),
@@ -1078,6 +1082,34 @@ impl LayoutEngine {
                 }
                 self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
                 self.tree.group_selection(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::IncreaseSelectionLeft => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.tree.increase_selection_left(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::IncreaseSelectionRight => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.tree.increase_selection_right(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::DecreaseSelectionLeft => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.tree.decrease_selection_left(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::DecreaseSelectionRight => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.tree.decrease_selection_right(layout);
                 EventResponse::default()
             }
             LayoutCommand::MoveSelectionToSiblingNext => {

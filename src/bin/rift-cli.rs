@@ -182,6 +182,14 @@ enum LayoutCommands {
     UngroupSiblings,
     /// Wrap selected window/container in a new group container
     GroupSelection,
+    /// Expand selection to include previous sibling
+    IncreaseSelectionLeft,
+    /// Expand selection to include next sibling
+    IncreaseSelectionRight,
+    /// Contract selection by removing leftmost node
+    DecreaseSelectionLeft,
+    /// Contract selection by removing rightmost node
+    DecreaseSelectionRight,
     /// Move selected window/container into nearest sibling container (next direction)
     MoveSelectionToSiblingNext,
     /// Move selected window/container into nearest sibling container (prev direction)
@@ -582,6 +590,10 @@ fn map_layout_command(cmd: LayoutCommands) -> Result<RiftCommand, String> {
         LayoutCommands::UngroupSelection => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::UngroupSelection))),
         LayoutCommands::UngroupSiblings => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::UngroupSiblings))),
         LayoutCommands::GroupSelection => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::GroupSelection))),
+        LayoutCommands::IncreaseSelectionLeft => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::IncreaseSelectionLeft))),
+        LayoutCommands::IncreaseSelectionRight => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::IncreaseSelectionRight))),
+        LayoutCommands::DecreaseSelectionLeft => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::DecreaseSelectionLeft))),
+        LayoutCommands::DecreaseSelectionRight => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::DecreaseSelectionRight))),
         LayoutCommands::MoveSelectionToSiblingNext => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::MoveSelectionToSiblingNext))),
         LayoutCommands::MoveSelectionToSiblingPrev => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::MoveSelectionToSiblingPrev))),
         LayoutCommands::MoveNode { direction } => Ok(RiftCommand::Reactor(

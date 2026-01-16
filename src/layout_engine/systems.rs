@@ -34,6 +34,10 @@ pub trait LayoutSystem: Serialize + for<'de> Deserialize<'de> {
     fn ungroup_selection(&mut self, layout: LayoutId) -> bool;
     fn ungroup_siblings(&mut self, layout: LayoutId) -> bool;
     fn group_selection(&mut self, layout: LayoutId) -> bool;
+    fn increase_selection_left(&mut self, layout: LayoutId) -> bool;
+    fn increase_selection_right(&mut self, layout: LayoutId) -> bool;
+    fn decrease_selection_left(&mut self, layout: LayoutId) -> bool;
+    fn decrease_selection_right(&mut self, layout: LayoutId) -> bool;
     fn move_selection_to_sibling_next(&mut self, layout: LayoutId) -> bool;
     fn move_selection_to_sibling_prev(&mut self, layout: LayoutId) -> bool;
     fn move_focus(

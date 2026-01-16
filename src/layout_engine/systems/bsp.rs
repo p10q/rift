@@ -712,6 +712,26 @@ impl LayoutSystem for BspLayoutSystem {
         false
     }
 
+    fn increase_selection_left(&mut self, _layout: LayoutId) -> bool {
+        // Multi-node selection not supported in BSP mode
+        false
+    }
+
+    fn increase_selection_right(&mut self, _layout: LayoutId) -> bool {
+        // Multi-node selection not supported in BSP mode
+        false
+    }
+
+    fn decrease_selection_left(&mut self, _layout: LayoutId) -> bool {
+        // Multi-node selection not supported in BSP mode
+        false
+    }
+
+    fn decrease_selection_right(&mut self, _layout: LayoutId) -> bool {
+        // Multi-node selection not supported in BSP mode
+        false
+    }
+
     fn ungroup_siblings(&mut self, layout: LayoutId) -> bool {
         let Some(sel) = self.selection_of_layout(layout) else {
             return false;

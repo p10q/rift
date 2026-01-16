@@ -25,6 +25,8 @@ pub struct Selection {
 struct SelectionInfo {
     selected_child: NodeId,
     stop_here: bool,
+    range_start: Option<NodeId>,
+    range_end: Option<NodeId>,
 }
 
 impl Selection {
@@ -57,6 +59,8 @@ impl Selection {
                 .insert(parent, SelectionInfo {
                     selected_child: node,
                     stop_here: false,
+                    range_start: None,
+                    range_end: None,
                 })
                 .map(|info| info.selected_child != node)
                 .unwrap_or(true)
@@ -74,6 +78,8 @@ impl Selection {
             self.nodes.insert(parent, SelectionInfo {
                 selected_child: node,
                 stop_here: false,
+                range_start: None,
+                range_end: None,
             });
             node = parent;
         }
@@ -96,6 +102,8 @@ impl Selection {
                 self.nodes.insert(dest, SelectionInfo {
                     selected_child,
                     stop_here: self.nodes[src].stop_here,
+                    range_start: None,
+                    range_end: None,
                 });
             }
             RemovingFromParent(node) => {
@@ -110,6 +118,35 @@ impl Selection {
             }
             RemovedFromForest(node) => {
                 self.nodes.remove(node);
+            }
+        }
+    }
+
+    pub fn set_range(&mut self, map: &NodeMap, node: NodeId, start: NodeId, end: NodeId) {
+        if let Some(parent) = node.parent(map) {
+            if let Some(info) = self.nodes.get_mut(parent) {
+                info.range_start = Some(start);
+                info.range_end = Some(end);
+            }
+        }
+    }
+
+    pub fn get_range(&self, map: &NodeMap, node: NodeId) -> Option<(NodeId, NodeId)> {
+        if let Some(parent) = node.parent(map) {
+            if let Some(info) = self.nodes.get(parent) {
+                if let (Some(start), Some(end)) = (info.range_start, info.range_end) {
+                    return Some((start, end));
+                }
+            }
+        }
+        None
+    }
+
+    pub fn clear_range(&mut self, map: &NodeMap, node: NodeId) {
+        if let Some(parent) = node.parent(map) {
+            if let Some(info) = self.nodes.get_mut(parent) {
+                info.range_start = None;
+                info.range_end = None;
             }
         }
     }

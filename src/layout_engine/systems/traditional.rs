@@ -339,6 +339,29 @@ impl TraditionalLayoutSystem {
         self.set_layout(common_parent, container_layout);
         self.select(common_parent);
     }
+
+    fn get_selection_range_nodes(&self, selection: NodeId) -> Vec<NodeId> {
+        let map = &self.tree.map;
+        
+        // Check if there's a range set
+        if let Some((start, end)) = self.tree.data.selection.get_range(map, selection) {
+            // Collect all siblings between start and end (inclusive)
+            let mut nodes = vec![start];
+            let mut current = start;
+            while current != end {
+                if let Some(next) = current.next_sibling(map) {
+                    nodes.push(next);
+                    current = next;
+                } else {
+                    break;
+                }
+            }
+            nodes
+        } else {
+            // No range, just return the single selection
+            vec![selection]
+        }
+    }
 }
 
 impl Drop for TraditionalLayoutSystem {
@@ -1214,7 +1237,16 @@ impl LayoutSystem for TraditionalLayoutSystem {
         let selection = self.selection(layout);
         let map = &self.tree.map;
         
-        let Some(parent) = selection.parent(map) else {
+        // Get the range of selected nodes, or just the single selection
+        let nodes = self.get_selection_range_nodes(selection);
+        
+        if nodes.is_empty() {
+            return false;
+        }
+        
+        let first_node = nodes[0];
+        
+        let Some(parent) = first_node.parent(map) else {
             return false;
         };
         
@@ -1222,26 +1254,117 @@ impl LayoutSystem for TraditionalLayoutSystem {
         let parent_layout = self.layout(parent);
         
         // Remember if this was locally selected
-        let was_selected = self.tree.data.selection.local_selection(map, parent) == Some(selection);
+        let was_selected = self.tree.data.selection.local_selection(map, parent) == Some(first_node);
         
-        // Create a new container node and insert it where the selection is
-        let container = self.tree.mk_node().insert_before(selection);
+        // Create a new container node and insert it where the first selection is
+        let container = self.tree.mk_node().insert_before(first_node);
         
         // Set the container's layout kind to match the parent
         self.tree.data.layout.set_kind(container, parent_layout);
         
-        // Inherit the size from the selection
-        self.tree.data.layout.assume_size_of(container, selection, &self.tree.map);
+        // Inherit the size from the first node
+        self.tree.data.layout.assume_size_of(container, first_node, &self.tree.map);
         
-        // Move the selection into the new container
-        selection.detach(&mut self.tree).push_back(container);
+        // Move all selected nodes into the new container
+        for &node in &nodes {
+            node.detach(&mut self.tree).push_back(container);
+        }
         
-        // Keep selection on the moved node
+        // Clear the selection range
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
+        
+        // Keep selection on the first moved node
         if was_selected {
-            self.select(selection);
+            self.select(first_node);
         }
         
         true
+    }
+
+    fn increase_selection_left(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        // Get current range or create one
+        let (start, end) = if let Some((s, e)) = self.tree.data.selection.get_range(map, selection) {
+            (s, e)
+        } else {
+            // No range yet, start one with the current selection
+            (selection, selection)
+        };
+        
+        // Try to expand left (previous sibling from start)
+        if let Some(prev) = start.prev_sibling(map) {
+            self.tree.data.selection.set_range(map, selection, prev, end);
+            return true;
+        }
+        false
+    }
+
+    fn increase_selection_right(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        // Get current range or create one
+        let (start, end) = if let Some((s, e)) = self.tree.data.selection.get_range(map, selection) {
+            (s, e)
+        } else {
+            (selection, selection)
+        };
+        
+        // Try to expand right (next sibling from end)
+        if let Some(next) = end.next_sibling(map) {
+            self.tree.data.selection.set_range(map, selection, start, next);
+            return true;
+        }
+        false
+    }
+
+    fn decrease_selection_left(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        // Get current range
+        let Some((start, end)) = self.tree.data.selection.get_range(map, selection) else {
+            // No range to decrease
+            return false;
+        };
+        
+        // If only one node, clear the range
+        if start == end {
+            self.tree.data.selection.clear_range(map, selection);
+            return true;
+        }
+        
+        // Move start right (next sibling)
+        if let Some(next) = start.next_sibling(map) {
+            self.tree.data.selection.set_range(map, selection, next, end);
+            return true;
+        }
+        false
+    }
+
+    fn decrease_selection_right(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        // Get current range
+        let Some((start, end)) = self.tree.data.selection.get_range(map, selection) else {
+            return false;
+        };
+        
+        // If only one node, clear the range
+        if start == end {
+            self.tree.data.selection.clear_range(map, selection);
+            return true;
+        }
+        
+        // Move end left (previous sibling)
+        if let Some(prev) = end.prev_sibling(map) {
+            self.tree.data.selection.set_range(map, selection, start, prev);
+            return true;
+        }
+        false
     }
 
     fn ungroup_siblings(&mut self, layout: LayoutId) -> bool {
@@ -1717,16 +1840,57 @@ impl TraditionalLayoutSystem {
 
 impl TraditionalLayoutSystem {
     fn get_ascii_tree(&self, node: NodeId) -> ascii_tree::Tree {
-        let status = match node.parent(&self.tree.map) {
-            None => "",
-            Some(parent)
-                if self.tree.data.selection.local_selection(&self.tree.map, parent)
-                    == Some(node) =>
-            {
-                "☒ "
+        let is_locally_selected = match node.parent(&self.tree.map) {
+            None => false,
+            Some(parent) => {
+                self.tree.data.selection.local_selection(&self.tree.map, parent) == Some(node)
             }
-            _ => "☐ ",
         };
+        
+        // Check if node is part of a selection range
+        let in_range = if let Some(_parent) = node.parent(&self.tree.map) {
+            if let Some((start, end)) = self.tree.data.selection.get_range(&self.tree.map, node) {
+                // Check if this node is between start and end
+                let mut current = start;
+                let mut found = current == node;
+                while !found && current != end {
+                    if let Some(next) = current.next_sibling(&self.tree.map) {
+                        current = next;
+                        found = current == node;
+                    } else {
+                        break;
+                    }
+                }
+                if found {
+                    Some((start, end))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        let status = if is_locally_selected {
+            "☒ "
+        } else if let Some((start, end)) = in_range {
+            if node == start && node == end {
+                "◆ "  // Single node in range
+            } else if node == start {
+                "⟦ "  // Range start
+            } else if node == end {
+                "⟧ "  // Range end
+            } else {
+                "◆ "  // Middle of range
+            }
+        } else if node.parent(&self.tree.map).is_none() {
+            ""  // Root
+        } else {
+            "☐ "  // Not selected
+        };
+        
         let desc = format!("{status}{node:?}");
         let desc = match self.window_at(node) {
             Some(wid) => format!("{desc} {:?} {}", wid, self.tree.data.layout.debug(node, false)),
