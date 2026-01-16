@@ -1397,7 +1397,8 @@ impl LayoutEngine {
         }
     }
 
-    /// Get the frame of the currently selected container if it's a container (not a leaf window)
+    /// Get the frame and child count of the currently selected node
+    /// Returns (frame, child_count) where child_count is Some for containers, None for windows
     pub fn get_selected_container_frame(
         &mut self,
         space: SpaceId,
@@ -1406,7 +1407,7 @@ impl LayoutEngine {
         stack_line_thickness: f64,
         stack_line_horiz: crate::common::config::HorizontalPlacement,
         stack_line_vert: crate::common::config::VerticalPlacement,
-    ) -> Option<CGRect> {
+    ) -> Option<(CGRect, Option<usize>)> {
         let layout_id = self.layout(space);
         match &self.tree {
             LayoutSystemKind::Traditional(s) => s.get_selected_container_frame(

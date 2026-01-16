@@ -11,6 +11,7 @@ use crate::ui::corner_indicator::CornerIndicatorWindow;
 pub struct ContainerSelection {
     pub space_id: SpaceId,
     pub frame: CGRect,
+    pub child_count: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -97,14 +98,45 @@ impl CornerIndicator {
     }
 
     fn handle_selection_updated(&mut self, _space_id: SpaceId, container: Option<ContainerSelection>) {
+        // Check if anything actually changed
+        let needs_update = match (&self.current_selection, &container) {
+            (None, None) => false,
+            (Some(_), None) | (None, Some(_)) => true,
+            (Some(old), Some(new)) => {
+                // Check if frame or child_count changed
+                let frame_changed = (old.frame.origin.x - new.frame.origin.x).abs() > 0.5
+                    || (old.frame.origin.y - new.frame.origin.y).abs() > 0.5
+                    || (old.frame.size.width - new.frame.size.width).abs() > 0.5
+                    || (old.frame.size.height - new.frame.size.height).abs() > 0.5;
+                let child_count_changed = old.child_count != new.child_count;
+                
+                frame_changed || child_count_changed
+            }
+        };
+
+        if !needs_update {
+            return;
+        }
+
         self.current_selection = container.clone();
 
         if let Some(selection) = container {
-            // Show indicator at the container's frame
-            self.ensure_indicator();
+            // Destroy and recreate the indicator to force a complete refresh
             if let Some(indicator) = &self.indicator {
-                if let Err(err) = indicator.update(selection.frame) {
-                    tracing::warn!(?err, "failed to update corner indicator");
+                let _ = indicator.hide();
+            }
+            self.indicator = None;
+            
+            // Create new indicator
+            match CornerIndicatorWindow::new() {
+                Ok(indicator) => {
+                    if let Err(err) = indicator.update(selection.frame, selection.child_count) {
+                        tracing::warn!(?err, "failed to update corner indicator");
+                    }
+                    self.indicator = Some(indicator);
+                }
+                Err(err) => {
+                    tracing::warn!(?err, "failed to recreate corner indicator window");
                 }
             }
         } else {
@@ -114,6 +146,7 @@ impl CornerIndicator {
                     tracing::warn!(?err, "failed to hide corner indicator");
                 }
             }
+            self.indicator = None;
         }
     }
 
@@ -141,7 +174,7 @@ impl CornerIndicator {
             if let Some(selection) = self.current_selection.clone() {
                 self.ensure_indicator();
                 if let Some(indicator) = &self.indicator {
-                    if let Err(err) = indicator.update(selection.frame) {
+                    if let Err(err) = indicator.update(selection.frame, selection.child_count) {
                         tracing::warn!(?err, "failed to re-enable corner indicator");
                     }
                 }

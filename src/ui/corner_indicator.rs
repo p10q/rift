@@ -5,7 +5,8 @@ use objc2::rc::Retained;
 use objc2_app_kit::NSStatusWindowLevel;
 use objc2_core_foundation::{CFType, CGPoint, CGRect, CGSize};
 use objc2_core_graphics::CGContext;
-use objc2_quartz_core::{CALayer, CATransaction};
+use objc2_foundation::NSString;
+use objc2_quartz_core::{CALayer, CATextLayer, CATransaction, kCAAlignmentCenter};
 use tracing::warn;
 
 use crate::sys::cgs_window::{CgsWindow, CgsWindowError};
@@ -19,9 +20,11 @@ unsafe extern "C" {
 }
 
 /// Size of each corner dot in points
-const DOT_SIZE: f64 = 10.0;
+const DOT_SIZE: f64 = 12.0;
 /// How far inset from the actual corner
-const CORNER_INSET: f64 = 2.0;
+const CORNER_INSET: f64 = 4.0;
+/// Size of the count indicator box
+const COUNT_BOX_SIZE: f64 = 24.0;
 
 pub struct CornerIndicatorWindow {
     cgs_window: CgsWindow,
@@ -47,6 +50,8 @@ impl CornerIndicatorWindow {
 
         let root_layer = CALayer::layer();
         root_layer.setFrame(CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(1.0, 1.0)));
+        // Set scale for retina displays to avoid blurriness
+        root_layer.setContentsScale(2.0);
 
         Ok(Self {
             cgs_window,
@@ -55,53 +60,118 @@ impl CornerIndicatorWindow {
         })
     }
 
-    pub fn update(&self, container_frame: CGRect) -> Result<(), CgsWindowError> {
+    pub fn update(&self, container_frame: CGRect, child_count: Option<usize>) -> Result<(), CgsWindowError> {
         *self.current_frame.borrow_mut() = Some(container_frame);
 
         // Update the window to cover the container area
         self.cgs_window.set_shape(container_frame)?;
+        
+        // Set resolution for retina displays
+        if let Err(err) = self.cgs_window.set_resolution(2.0) {
+            warn!(error=?err, "failed to set corner indicator resolution");
+        }
+        
         self.root_layer.setFrame(CGRect::new(
             CGPoint::new(0.0, 0.0),
             CGSize::new(container_frame.size.width, container_frame.size.height),
         ));
+        self.root_layer.setContentsScale(2.0);
 
-        // Clear existing layers
+        // Clear existing layers and force a complete redraw
         CATransaction::begin();
         CATransaction::setDisableActions(true);
         
-        unsafe { self.root_layer.setSublayers(None) };
-
-        // Create 4 corner dot layers (in local coordinates)
-        let positions = [
-            // Top-left
-            CGPoint::new(CORNER_INSET, container_frame.size.height - CORNER_INSET - DOT_SIZE),
-            // Top-right  
-            CGPoint::new(container_frame.size.width - CORNER_INSET - DOT_SIZE, container_frame.size.height - CORNER_INSET - DOT_SIZE),
-            // Bottom-left
-            CGPoint::new(CORNER_INSET, CORNER_INSET),
-            // Bottom-right
-            CGPoint::new(container_frame.size.width - CORNER_INSET - DOT_SIZE, CORNER_INSET),
-        ];
+        // Completely clear the root layer
+        unsafe { 
+            self.root_layer.setSublayers(None);
+            // Force the root layer to redraw by updating its frame
+            let current_frame = self.root_layer.frame();
+            self.root_layer.setFrame(current_frame);
+        }
 
         let color = Color::new(0.0, 0.5, 1.0, 0.95); // Blue color
+        let border_color = Color::new(1.0, 1.0, 1.0, 0.9); // White border
 
-        for pos in &positions {
-            let layer = CALayer::layer();
-            layer.setFrame(CGRect::new(*pos, CGSize::new(DOT_SIZE, DOT_SIZE)));
-            layer.setCornerRadius(DOT_SIZE / 2.0); // Make it circular
-            layer.setBackgroundColor(Some(&color.to_nscolor().CGColor()));
+        // If we have a child count (container), show count in top-left, dots in other 3 corners
+        // If no child count (window), show dots in all 4 corners
+        if let Some(count) = child_count {
+            // Top-left: Show count badge
+            let count_text = if count <= 9 {
+                format!("{}", count)
+            } else {
+                "+".to_string()
+            };
             
-            // Add border for better visibility
-            let border_color = Color::new(1.0, 1.0, 1.0, 0.8); // White border
-            layer.setBorderColor(Some(&border_color.to_nscolor().CGColor()));
-            layer.setBorderWidth(1.5);
-            
-            self.root_layer.addSublayer(&layer);
+            let text_layer = CATextLayer::new();
+            let top_left_pos = CGPoint::new(
+                CORNER_INSET,
+                container_frame.size.height - CORNER_INSET - COUNT_BOX_SIZE
+            );
+            text_layer.setFrame(CGRect::new(top_left_pos, CGSize::new(COUNT_BOX_SIZE, COUNT_BOX_SIZE)));
+            unsafe {
+                text_layer.setString(Some(&NSString::from_str(&count_text)));
+                text_layer.setAlignmentMode(kCAAlignmentCenter);
+            }
+            text_layer.setFontSize(16.0);
+            text_layer.setForegroundColor(Some(&Color::new(1.0, 1.0, 1.0, 1.0).to_nscolor().CGColor()));
+            text_layer.setBackgroundColor(Some(&color.to_nscolor().CGColor()));
+            text_layer.setCornerRadius(COUNT_BOX_SIZE / 2.0);
+            text_layer.setBorderColor(Some(&border_color.to_nscolor().CGColor()));
+            text_layer.setBorderWidth(2.0);
+            text_layer.setContentsScale(2.0);
+            self.root_layer.addSublayer(&text_layer);
+
+            // Other 3 corners: Show dots
+            let dot_positions = [
+                // Top-right  
+                CGPoint::new(container_frame.size.width - CORNER_INSET - DOT_SIZE, container_frame.size.height - CORNER_INSET - DOT_SIZE),
+                // Bottom-left
+                CGPoint::new(CORNER_INSET, CORNER_INSET),
+                // Bottom-right
+                CGPoint::new(container_frame.size.width - CORNER_INSET - DOT_SIZE, CORNER_INSET),
+            ];
+
+            for pos in &dot_positions {
+                let layer = CALayer::layer();
+                layer.setFrame(CGRect::new(*pos, CGSize::new(DOT_SIZE, DOT_SIZE)));
+                layer.setCornerRadius(DOT_SIZE / 2.0);
+                layer.setBackgroundColor(Some(&color.to_nscolor().CGColor()));
+                layer.setBorderColor(Some(&border_color.to_nscolor().CGColor()));
+                layer.setBorderWidth(2.0);
+                layer.setContentsScale(2.0);
+                self.root_layer.addSublayer(&layer);
+            }
+        } else {
+            // No child count (window): Show dots in all 4 corners
+            let positions = [
+                // Top-left
+                CGPoint::new(CORNER_INSET, container_frame.size.height - CORNER_INSET - DOT_SIZE),
+                // Top-right  
+                CGPoint::new(container_frame.size.width - CORNER_INSET - DOT_SIZE, container_frame.size.height - CORNER_INSET - DOT_SIZE),
+                // Bottom-left
+                CGPoint::new(CORNER_INSET, CORNER_INSET),
+                // Bottom-right
+                CGPoint::new(container_frame.size.width - CORNER_INSET - DOT_SIZE, CORNER_INSET),
+            ];
+
+            for pos in &positions {
+                let layer = CALayer::layer();
+                layer.setFrame(CGRect::new(*pos, CGSize::new(DOT_SIZE, DOT_SIZE)));
+                layer.setCornerRadius(DOT_SIZE / 2.0);
+                layer.setBackgroundColor(Some(&color.to_nscolor().CGColor()));
+                layer.setBorderColor(Some(&border_color.to_nscolor().CGColor()));
+                layer.setBorderWidth(2.0);
+                layer.setContentsScale(2.0);
+                self.root_layer.addSublayer(&layer);
+            }
         }
 
         CATransaction::commit();
 
-        // Present the window
+        // Force the window to update by briefly ordering it out and back in
+        let _ = self.cgs_window.order_out();
+        
+        // Present the window with new content
         self.present();
         
         self.cgs_window.order_above(None)

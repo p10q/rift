@@ -325,7 +325,7 @@ impl LayoutManager {
                     let gaps =
                         reactor.config.settings.layout.gaps.effective_for_display(display_uuid);
                     
-                    let container_frame = reactor
+                    let container_info = reactor
                         .layout_manager
                         .layout_engine
                         .get_selected_container_frame(
@@ -337,9 +337,10 @@ impl LayoutManager {
                             reactor.config.settings.ui.stack_line.vert_placement,
                         );
 
-                    let container = container_frame.map(|frame| corner_indicator::ContainerSelection {
+                    let container = container_info.map(|(frame, child_count)| corner_indicator::ContainerSelection {
                         space_id: space,
                         frame,
+                        child_count,
                     });
 
                     if let Err(e) =

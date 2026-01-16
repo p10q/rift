@@ -150,7 +150,9 @@ thickness = 0.0
 spacing = 0.0
 
 # Corner indicators for selected nodes (windows and containers)
-# Show four blue dots at the corners of the currently selected window or container
+# Shows visual indicators at the corners of the currently selected window or container:
+#   - Windows: Four blue dots at all corners
+#   - Containers: Child count badge in top-left (1-9 or "+"), blue dots in other 3 corners
 # Helps visualize what is currently selected in the layout tree
 # Enabled by default; set to false to disable
 #corner_indicator_enabled = true

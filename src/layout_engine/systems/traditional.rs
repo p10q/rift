@@ -1278,7 +1278,8 @@ impl TraditionalLayoutSystem {
         out
     }
 
-    /// Get the frame of the currently selected node (container or window)
+    /// Get the frame and child count of the currently selected node
+    /// Returns (frame, child_count) where child_count is Some for containers, None for windows
     pub(crate) fn get_selected_container_frame(
         &self,
         layout: LayoutId,
@@ -1288,37 +1289,53 @@ impl TraditionalLayoutSystem {
         _stack_line_thickness: f64,
         _stack_line_horiz: crate::common::config::HorizontalPlacement,
         _stack_line_vert: crate::common::config::VerticalPlacement,
-    ) -> Option<CGRect> {
+    ) -> Option<(CGRect, Option<usize>)> {
         let map = &self.tree.map;
         let tiling_area = compute_tiling_area(screen, gaps);
 
-        let mut node = self.root(layout);
+        // Get the actual currently selected node (respects stop_here flag)
+        let root = self.root(layout);
+        let selected_node = self.tree.data.selection.current_selection(root);
+
+        // Now calculate the frame by walking down from root to the selected node
+        let mut node = root;
         let mut rect = tiling_area;
 
-        // Walk down the selection path to the current selection
-        loop {
+        // Walk the path from root to selected_node
+        while node != selected_node {
             let selection = self.tree.data.selection.local_selection(map, node);
             let Some(sel) = selection else {
-                break;
+                // This shouldn't happen if selected_node is valid, but handle it
+                return None;
             };
 
-            // Calculate the frame of this selected child within its parent
             rect = self.calculate_child_frame_in_container(node, sel, rect, gaps);
-
-            // If the selection is a container (has children), return its frame
-            if sel.children(map).next().is_some() {
-                return Some(rect);
-            }
-
-            // If it's a leaf window, also return its frame
-            if self.window_at(sel).is_some() {
-                return Some(rect);
-            }
-
-            // Continue down the tree
             node = sel;
         }
 
+        // Now 'node' is the selected_node, and 'rect' is its frame
+        // Determine if it's a window or container
+        let window_id = self.window_at(selected_node);
+        let children: Vec<_> = selected_node.children(map).collect();
+        let child_count = if !children.is_empty() {
+            Some(children.len())
+        } else {
+            None
+        };
+
+
+        if window_id.is_some() {
+            // It's a leaf window
+            return Some((rect, None));
+        }
+
+        // Check if it's a container
+        if child_count.is_some() {
+            // It's a container
+            return Some((rect, child_count));
+        }
+
+        // Empty node? Shouldn't happen, but return None
         None
     }
 
