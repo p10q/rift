@@ -33,7 +33,7 @@ pub trait LayoutSystem: Serialize + for<'de> Deserialize<'de> {
     fn descend_selection(&mut self, layout: LayoutId) -> bool;
     fn ungroup_selection(&mut self, layout: LayoutId) -> bool;
     fn ungroup_siblings(&mut self, layout: LayoutId) -> bool;
-    fn group_selection(&mut self, layout: LayoutId) -> bool;
+    fn group_selection(&mut self, layout: LayoutId, auto_stack: bool, stack_orientation: crate::common::config::StackDefaultOrientation) -> Vec<WindowId>;
     fn increase_selection_left(&mut self, layout: LayoutId) -> bool;
     fn increase_selection_right(&mut self, layout: LayoutId) -> bool;
     fn decrease_selection_left(&mut self, layout: LayoutId) -> bool;

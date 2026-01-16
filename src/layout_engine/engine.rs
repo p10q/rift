@@ -1081,8 +1081,19 @@ impl LayoutEngine {
                     return EventResponse::default();
                 }
                 self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
-                self.tree.group_selection(layout);
-                EventResponse::default()
+                let raise_windows = self.tree.group_selection(
+                    layout, 
+                    self.layout_settings.auto_stack_on_group,
+                    self.layout_settings.stack.default_orientation
+                );
+                if !raise_windows.is_empty() {
+                    EventResponse {
+                        raise_windows,
+                        focus_window: None,
+                    }
+                } else {
+                    EventResponse::default()
+                }
             }
             LayoutCommand::IncreaseSelectionLeft => {
                 if is_floating {
@@ -1497,6 +1508,30 @@ impl LayoutEngine {
                 stack_line_vert,
             ),
             _ => None,
+        }
+    }
+
+    pub fn get_selection_range_frames(
+        &mut self,
+        space: SpaceId,
+        screen: CGRect,
+        gaps: &crate::common::config::GapSettings,
+        stack_line_thickness: f64,
+        stack_line_horiz: crate::common::config::HorizontalPlacement,
+        stack_line_vert: crate::common::config::VerticalPlacement,
+    ) -> Vec<CGRect> {
+        let layout_id = self.layout(space);
+        match &self.tree {
+            LayoutSystemKind::Traditional(s) => s.get_selection_range_frames(
+                layout_id,
+                screen,
+                self.layout_settings.stack.stack_offset,
+                gaps,
+                stack_line_thickness,
+                stack_line_horiz,
+                stack_line_vert,
+            ),
+            _ => Vec::new(),
         }
     }
 

@@ -706,10 +706,10 @@ impl LayoutSystem for BspLayoutSystem {
         false
     }
 
-    fn group_selection(&mut self, _layout: LayoutId) -> bool {
+    fn group_selection(&mut self, _layout: LayoutId, _auto_stack: bool, _stack_orientation: crate::common::config::StackDefaultOrientation) -> Vec<WindowId> {
         // For BSP, grouping a single node doesn't fit the binary structure
-        // Return false (not supported in BSP mode)
-        false
+        // Return empty vec (not supported in BSP mode)
+        Vec::new()
     }
 
     fn increase_selection_left(&mut self, _layout: LayoutId) -> bool {

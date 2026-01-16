@@ -80,6 +80,11 @@ hot_reload = true
 #   defaults to "traditional" if omitted
 mode = "traditional"
 
+# Automatically convert newly created groups to stacks
+# When true, using group_selection will create a group AND convert it to a stack
+# When false, group_selection creates a regular container (use toggle_stack to convert manually)
+auto_stack_on_group = true
+
 [settings.layout.stack]
 # How much of each stacked window sticks out (in pixels)
 # Set to 0.0 to have them directly on top of each other.
@@ -351,6 +356,8 @@ comb1 = "Alt + Shift"
 # "Ctrl + Meta + Shift + G" = "group_selection"          # Wrap selection(s) in new container
 
 # Multi-node selection for easy grouping
+# Use increase/decrease to select multiple sibling nodes, then group them with group_selection
+# The selection range is automatically cleared when navigating (ascend, descend, move_focus, etc.)
 # "Ctrl + Meta + Shift + Left" = "increase_selection_left"    # Expand selection left
 # "Ctrl + Meta + Shift + Right" = "increase_selection_right"  # Expand selection right
 # "Ctrl + Meta + Alt + Left" = "decrease_selection_left"      # Contract selection left

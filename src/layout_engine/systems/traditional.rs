@@ -453,7 +453,11 @@ impl LayoutSystem for TraditionalLayoutSystem {
     }
 
     fn ascend_selection(&mut self, layout: LayoutId) -> bool {
-        if let Some(parent) = self.selection(layout).parent(self.map()) {
+        // Clear selection range when ascending
+        let selection = self.selection(layout);
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
+        
+        if let Some(parent) = selection.parent(self.map()) {
             self.select(parent);
             return true;
         }
@@ -462,6 +466,9 @@ impl LayoutSystem for TraditionalLayoutSystem {
 
     fn descend_selection(&mut self, layout: LayoutId) -> bool {
         let selection = self.selection(layout);
+        
+        // Clear selection range when descending
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
         
         // Try to use the last selection within this container
         if let Some(child) = self.tree.data.selection.last_selection(self.map(), selection) {
@@ -484,6 +491,10 @@ impl LayoutSystem for TraditionalLayoutSystem {
         direction: Direction,
     ) -> (Option<WindowId>, Vec<WindowId>) {
         let selection = self.selection(layout);
+        
+        // Clear selection range when moving focus
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
+        
         if let Some(new_node) = self.traverse_internal(selection, direction) {
             let focus_target = self.find_best_focus_target(new_node);
             let Some((focus_node, focus_window)) = focus_target else {
@@ -520,6 +531,9 @@ impl LayoutSystem for TraditionalLayoutSystem {
     ) -> (Option<WindowId>, Vec<WindowId>) {
         let selection = self.selection(layout);
         
+        // Clear selection range when moving focus
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
+        
         // Only move to siblings at the current level, don't traverse up/down hierarchy
         if let Some(sibling) = self.move_over(selection, direction) {
             // Select the sibling
@@ -543,6 +557,9 @@ impl LayoutSystem for TraditionalLayoutSystem {
         layout: LayoutId,
     ) -> (Option<WindowId>, Vec<WindowId>) {
         let selection = self.selection(layout);
+        
+        // Clear selection range when cycling siblings
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
         
         // First try to find next sibling at current level
         let next_sibling = selection.next_sibling(self.map());
@@ -590,6 +607,9 @@ impl LayoutSystem for TraditionalLayoutSystem {
         layout: LayoutId,
     ) -> (Option<WindowId>, Vec<WindowId>) {
         let selection = self.selection(layout);
+        
+        // Clear selection range when cycling siblings
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
         
         // First try to find previous sibling at current level
         let prev_sibling = selection.prev_sibling(self.map());
@@ -751,11 +771,18 @@ impl LayoutSystem for TraditionalLayoutSystem {
 
     fn move_selection(&mut self, layout: LayoutId, direction: Direction) -> bool {
         let selection = self.selection(layout);
+        
+        // Clear selection range when moving node
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
+        
         self.move_node(layout, selection, direction)
     }
 
     fn move_selection_level_restricted(&mut self, layout: LayoutId, direction: Direction) -> bool {
         let selection = self.selection(layout);
+        
+        // Clear selection range when moving node
+        self.tree.data.selection.clear_range(&self.tree.map, selection);
         
         // Only swap with siblings at the current level
         if let Some(sibling) = self.move_over(selection, direction) {
@@ -1233,7 +1260,7 @@ impl LayoutSystem for TraditionalLayoutSystem {
         false
     }
 
-    fn group_selection(&mut self, layout: LayoutId) -> bool {
+    fn group_selection(&mut self, layout: LayoutId, auto_stack: bool, stack_orientation: crate::common::config::StackDefaultOrientation) -> Vec<WindowId> {
         let selection = self.selection(layout);
         let map = &self.tree.map;
         
@@ -1241,20 +1268,17 @@ impl LayoutSystem for TraditionalLayoutSystem {
         let nodes = self.get_selection_range_nodes(selection);
         
         if nodes.is_empty() {
-            return false;
+            return Vec::new();
         }
         
         let first_node = nodes[0];
         
         let Some(parent) = first_node.parent(map) else {
-            return false;
+            return Vec::new();
         };
         
         // Get the parent's layout kind to use for the new container
         let parent_layout = self.layout(parent);
-        
-        // Remember if this was locally selected
-        let was_selected = self.tree.data.selection.local_selection(map, parent) == Some(first_node);
         
         // Create a new container node and insert it where the first selection is
         let container = self.tree.mk_node().insert_before(first_node);
@@ -1273,12 +1297,16 @@ impl LayoutSystem for TraditionalLayoutSystem {
         // Clear the selection range
         self.tree.data.selection.clear_range(&self.tree.map, selection);
         
-        // Keep selection on the first moved node
-        if was_selected {
-            self.select(first_node);
+        // Ascend to the container level (stay at the same level as before grouping)
+        self.ascend_selection(layout);
+        
+        // If auto_stack is enabled, convert the new container to a stack
+        if auto_stack {
+            let raise_windows = self.apply_stacking_to_parent_of_selection(layout, stack_orientation);
+            return raise_windows;
         }
         
-        true
+        Vec::new()
     }
 
     fn increase_selection_left(&mut self, layout: LayoutId) -> bool {
@@ -1745,6 +1773,66 @@ impl TraditionalLayoutSystem {
 
         // Empty node? Shouldn't happen, but return None
         None
+    }
+
+    pub(crate) fn get_selection_range_frames(
+        &self,
+        layout: LayoutId,
+        screen: CGRect,
+        _stack_offset: f64,
+        gaps: &crate::common::config::GapSettings,
+        _stack_line_thickness: f64,
+        _stack_line_horiz: crate::common::config::HorizontalPlacement,
+        _stack_line_vert: crate::common::config::VerticalPlacement,
+    ) -> Vec<CGRect> {
+        let map = &self.tree.map;
+        let tiling_area = compute_tiling_area(screen, gaps);
+        let root = self.root(layout);
+        let selected_node = self.tree.data.selection.current_selection(root);
+
+        // Get the selection range
+        let Some((start, end)) = self.tree.data.selection.get_range(map, selected_node) else {
+            return Vec::new();
+        };
+
+        // Collect all nodes in the range
+        let mut nodes = vec![start];
+        let mut current = start;
+        while current != end {
+            if let Some(next) = current.next_sibling(map) {
+                nodes.push(next);
+                current = next;
+            } else {
+                break;
+            }
+        }
+
+        // Calculate frames for each node in the range
+        let mut frames = Vec::new();
+        for &node in &nodes {
+            if let Some(parent) = node.parent(map) {
+                // Calculate the parent's frame first
+                let mut parent_node = root;
+                let mut parent_rect = tiling_area;
+                
+                // Walk from root to parent
+                while parent_node != parent {
+                    let selection = self.tree.data.selection.local_selection(map, parent_node);
+                    if let Some(sel) = selection {
+                        parent_rect = self.calculate_child_frame_in_container(parent_node, sel, parent_rect, gaps);
+                        parent_node = sel;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Now calculate this node's frame within its parent
+                let node_rect = self.calculate_child_frame_in_container(parent, node, parent_rect, gaps);
+                frames.push(node_rect);
+            }
+        }
+
+        frames
     }
 
     fn calculate_child_frame_in_axis(

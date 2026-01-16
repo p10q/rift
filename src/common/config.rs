@@ -540,6 +540,9 @@ pub struct LayoutSettings {
     /// Gap configuration for window spacing
     #[serde(default)]
     pub gaps: GapSettings,
+    /// Automatically convert newly created groups to stacks
+    #[serde(default = "yes")]
+    pub auto_stack_on_group: bool,
 }
 
 /// Layout mode enum

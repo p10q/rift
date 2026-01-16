@@ -14,11 +14,18 @@ pub struct ContainerSelection {
     pub child_count: Option<usize>,
 }
 
+#[derive(Debug, Clone)]
+pub struct RangeSelection {
+    pub space_id: SpaceId,
+    pub frames: Vec<CGRect>,
+}
+
 #[derive(Debug)]
 pub enum Event {
     SelectionUpdated {
         space_id: SpaceId,
         container: Option<ContainerSelection>,
+        range: Option<RangeSelection>,
     },
     ScreenParametersChanged(CoordinateConverter),
     ConfigUpdated(Config),
@@ -30,7 +37,9 @@ pub struct CornerIndicator {
     #[allow(dead_code)]
     mtm: MainThreadMarker,
     indicator: Option<CornerIndicatorWindow>,
+    range_indicators: Vec<CornerIndicatorWindow>,
     current_selection: Option<ContainerSelection>,
+    current_range: Option<RangeSelection>,
     #[allow(dead_code)]
     reactor_tx: reactor::Sender,
     #[allow(dead_code)]
@@ -53,7 +62,9 @@ impl CornerIndicator {
             rx,
             mtm,
             indicator: None,
+            range_indicators: Vec::new(),
             current_selection: None,
+            current_range: None,
             reactor_tx,
             coordinate_converter,
         }
@@ -85,8 +96,8 @@ impl CornerIndicator {
             return;
         }
         match event {
-            Event::SelectionUpdated { space_id, container } => {
-                self.handle_selection_updated(space_id, container);
+            Event::SelectionUpdated { space_id, container, range } => {
+                self.handle_selection_updated(space_id, container, range);
             }
             Event::ScreenParametersChanged(converter) => {
                 self.handle_screen_parameters_changed(converter);
@@ -97,7 +108,10 @@ impl CornerIndicator {
         }
     }
 
-    fn handle_selection_updated(&mut self, _space_id: SpaceId, container: Option<ContainerSelection>) {
+    fn handle_selection_updated(&mut self, _space_id: SpaceId, container: Option<ContainerSelection>, range: Option<RangeSelection>) {
+        tracing::debug!("handle_selection_updated: container={:?}, range frames={}", 
+            container.as_ref().map(|c| format!("frame={:?}", c.frame)), 
+            range.as_ref().map(|r| r.frames.len()).unwrap_or(0));
         // Check if anything actually changed
         let needs_update = match (&self.current_selection, &container) {
             (None, None) => false,
@@ -114,24 +128,59 @@ impl CornerIndicator {
             }
         };
 
-        if !needs_update {
+        let range_changed = match (&self.current_range, &range) {
+            (None, None) => false,
+            (Some(_), None) | (None, Some(_)) => true,
+            (Some(old), Some(new)) => old.frames.len() != new.frames.len() || 
+                old.frames.iter().zip(&new.frames).any(|(a, b)| {
+                    (a.origin.x - b.origin.x).abs() > 0.5 ||
+                    (a.origin.y - b.origin.y).abs() > 0.5 ||
+                    (a.size.width - b.size.width).abs() > 0.5 ||
+                    (a.size.height - b.size.height).abs() > 0.5
+                }),
+        };
+
+        if !needs_update && !range_changed {
             return;
         }
 
         self.current_selection = container.clone();
+        self.current_range = range.clone();
 
-        if let Some(selection) = container {
-            // Destroy and recreate the indicator to force a complete refresh
-            if let Some(indicator) = &self.indicator {
-                let _ = indicator.hide();
+        // Clear all existing indicators
+        if let Some(indicator) = &self.indicator {
+            let _ = indicator.hide();
+        }
+        self.indicator = None;
+        
+        for indicator in &self.range_indicators {
+            let _ = indicator.hide();
+        }
+        self.range_indicators.clear();
+
+        // If there's a range, show yellow dots on ALL nodes in the range
+        if let Some(range_sel) = &range {
+            tracing::debug!("Creating {} yellow indicators for range", range_sel.frames.len());
+            for (i, frame) in range_sel.frames.iter().enumerate() {
+                match CornerIndicatorWindow::new_with_color(*frame, None, (1.0, 0.8, 0.0)) {
+                    Ok(indicator) => {
+                        tracing::debug!("Created yellow indicator {} at {:?}", i, frame);
+                        self.range_indicators.push(indicator);
+                    }
+                    Err(err) => {
+                        tracing::warn!(?err, "failed to create range indicator window");
+                    }
+                }
             }
-            self.indicator = None;
-            
-            // Create new indicator
+        } else if let Some(selection) = container {
+            // No range - show blue dots on the selected node only
+            tracing::debug!("Creating blue indicator at {:?}", selection.frame);
             match CornerIndicatorWindow::new() {
                 Ok(indicator) => {
                     if let Err(err) = indicator.update(selection.frame, selection.child_count) {
                         tracing::warn!(?err, "failed to update corner indicator");
+                    } else {
+                        tracing::debug!("Successfully updated blue indicator");
                     }
                     self.indicator = Some(indicator);
                 }
@@ -140,13 +189,7 @@ impl CornerIndicator {
                 }
             }
         } else {
-            // Hide indicator
-            if let Some(indicator) = &self.indicator {
-                if let Err(err) = indicator.hide() {
-                    tracing::warn!(?err, "failed to hide corner indicator");
-                }
-            }
-            self.indicator = None;
+            tracing::debug!("No container or range to show");
         }
     }
 

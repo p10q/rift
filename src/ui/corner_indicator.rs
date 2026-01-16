@@ -60,6 +60,78 @@ impl CornerIndicatorWindow {
         })
     }
 
+    pub fn new_with_color(container_frame: CGRect, child_count: Option<usize>, color_rgb: (f64, f64, f64)) -> Result<Self, CgsWindowError> {
+        let window = Self::new()?;
+        window.update_with_color(container_frame, child_count, color_rgb)?;
+        Ok(window)
+    }
+
+    fn update_with_color(&self, container_frame: CGRect, _child_count: Option<usize>, color_rgb: (f64, f64, f64)) -> Result<(), CgsWindowError> {
+        *self.current_frame.borrow_mut() = Some(container_frame);
+
+        // Update the window to cover the container area
+        self.cgs_window.set_shape(container_frame)?;
+        
+        // Set resolution for retina displays
+        if let Err(err) = self.cgs_window.set_resolution(2.0) {
+            warn!(error=?err, "failed to set corner indicator resolution");
+        }
+        
+        self.root_layer.setFrame(CGRect::new(
+            CGPoint::new(0.0, 0.0),
+            CGSize::new(container_frame.size.width, container_frame.size.height),
+        ));
+        self.root_layer.setContentsScale(2.0);
+
+        // Clear existing layers and force a complete redraw
+        CATransaction::begin();
+        CATransaction::setDisableActions(true);
+        
+        // Completely clear the root layer
+        unsafe { 
+            self.root_layer.setSublayers(None);
+            // Force the root layer to redraw by updating its frame
+            let current_frame = self.root_layer.frame();
+            self.root_layer.setFrame(current_frame);
+        }
+
+        let color = Color::new(color_rgb.0, color_rgb.1, color_rgb.2, 0.95);
+        let border_color = Color::new(1.0, 1.0, 1.0, 0.9); // White border
+
+        // Show dots in all 4 corners for range indicators
+        let dot_positions = [
+            // Top-left
+            CGPoint::new(CORNER_INSET, container_frame.size.height - CORNER_INSET - DOT_SIZE),
+            // Top-right  
+            CGPoint::new(container_frame.size.width - CORNER_INSET - DOT_SIZE, container_frame.size.height - CORNER_INSET - DOT_SIZE),
+            // Bottom-left
+            CGPoint::new(CORNER_INSET, CORNER_INSET),
+            // Bottom-right
+            CGPoint::new(container_frame.size.width - CORNER_INSET - DOT_SIZE, CORNER_INSET),
+        ];
+
+        for pos in &dot_positions {
+            let layer = CALayer::layer();
+            layer.setFrame(CGRect::new(*pos, CGSize::new(DOT_SIZE, DOT_SIZE)));
+            layer.setCornerRadius(DOT_SIZE / 2.0);
+            layer.setBackgroundColor(Some(&color.to_nscolor().CGColor()));
+            layer.setBorderColor(Some(&border_color.to_nscolor().CGColor()));
+            layer.setBorderWidth(2.0);
+            layer.setContentsScale(2.0);
+            self.root_layer.addSublayer(&layer);
+        }
+
+        CATransaction::commit();
+
+        // Force the window to update by briefly ordering it out and back in
+        let _ = self.cgs_window.order_out();
+        
+        // Present the window with new content
+        self.present();
+        
+        self.cgs_window.order_above(None)
+    }
+
     pub fn update(&self, container_frame: CGRect, child_count: Option<usize>) -> Result<(), CgsWindowError> {
         *self.current_frame.borrow_mut() = Some(container_frame);
 

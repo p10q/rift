@@ -343,10 +343,33 @@ impl LayoutManager {
                         child_count,
                     });
 
+                    let range_frames = reactor
+                        .layout_manager
+                        .layout_engine
+                        .get_selection_range_frames(
+                            space,
+                            screen.frame,
+                            &gaps,
+                            reactor.config.settings.ui.stack_line.thickness(),
+                            reactor.config.settings.ui.stack_line.horiz_placement,
+                            reactor.config.settings.ui.stack_line.vert_placement,
+                        );
+
+                    let range = if !range_frames.is_empty() {
+                        tracing::debug!("Selection range has {} frames", range_frames.len());
+                        Some(corner_indicator::RangeSelection {
+                            space_id: space,
+                            frames: range_frames,
+                        })
+                    } else {
+                        None
+                    };
+
                     if let Err(e) =
                         tx.try_send(corner_indicator::Event::SelectionUpdated {
                             space_id: space,
                             container,
+                            range,
                         })
                     {
                         tracing::warn!("Failed to send selection update to corner_indicator: {}", e);
