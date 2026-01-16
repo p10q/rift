@@ -1188,7 +1188,11 @@ impl LayoutSystem for TraditionalLayoutSystem {
             // Clean up parent if it's now empty or has only one child
             let parent_children_count = parent.children(&self.tree.map).count();
             if parent_children_count == 1 {
-                self.remove_unnecessary_container_internal(parent);
+                // Only remove unnecessary container if parent itself has a parent
+                // Otherwise, removing it will delete the remaining child
+                if parent.parent(&self.tree.map).is_some() {
+                    self.remove_unnecessary_container_internal(parent);
+                }
             } else if parent_children_count == 0 {
                 parent.detach(&mut self.tree).remove();
             }
@@ -1249,7 +1253,11 @@ impl LayoutSystem for TraditionalLayoutSystem {
             // Clean up parent if it's now empty or has only one child
             let parent_children_count = parent.children(&self.tree.map).count();
             if parent_children_count == 1 {
-                self.remove_unnecessary_container_internal(parent);
+                // Only remove unnecessary container if parent itself has a parent
+                // Otherwise, removing it will delete the remaining child
+                if parent.parent(&self.tree.map).is_some() {
+                    self.remove_unnecessary_container_internal(parent);
+                }
             } else if parent_children_count == 0 {
                 parent.detach(&mut self.tree).remove();
             }
@@ -2457,6 +2465,16 @@ impl TraditionalLayoutSystem {
         panic!("Nodes are not in the same tree, cannot find common parent");
     }
 
+    /// Removes an unnecessary container that has 0 or 1 children.
+    /// 
+    /// If the container has a parent, the child (if any) is promoted to the parent.
+    /// If the container has NO parent (is root-level), the child will be DELETED.
+    /// 
+    /// # Safety
+    /// Callers should check if `container` has a parent before calling this function
+    /// if they want to preserve children when the container is root-level.
+    /// 
+    /// Use `container.parent(&tree.map).is_some()` to verify before calling.
     fn remove_unnecessary_container_internal(&mut self, container: NodeId) {
         let children: Vec<_> = container.children(self.map()).collect();
         if children.len() <= 1 {
@@ -2466,6 +2484,8 @@ impl TraditionalLayoutSystem {
                 if let Some(parent) = parent {
                     detached.push_back(parent);
                 } else {
+                    // WARNING: This will delete the child. Callers should ensure
+                    // container has a parent if they want to preserve children.
                     detached.remove();
                 }
             }
@@ -3569,5 +3589,191 @@ mod tests {
         assert_eq!(frame.size.height, 10.0);
         assert_eq!(frame.origin.x, 0.0);
         assert_eq!(frame.origin.y, 0.0);
+    }
+
+    #[test]
+    fn test_move_selection_to_sibling_next_with_root_level_parent() {
+        // Test that moving a selection into a sibling container doesn't delete
+        // the sibling when parent is root-level (has no parent)
+        let mut system = TraditionalLayoutSystem::default();
+        let layout = system.create_layout();
+        let root = system.root(layout);
+        system.tree.data.layout.set_kind(root, LayoutKind::Horizontal);
+
+        // Add a window
+        system.add_window_after_selection(layout, w(1));
+        let window_node = system.selection(layout);
+
+        // Create a sibling container with some windows
+        let sibling_container = system.tree.mk_node().push_back(root);
+        system.tree.data.layout.set_kind(sibling_container, LayoutKind::Vertical);
+        
+        // Add windows to the sibling container using add_window_under
+        let _child1 = system.add_window_under(layout, sibling_container, w(2));
+        let _child2 = system.add_window_under(layout, sibling_container, w(3));
+
+        // Move the window into the sibling container
+        let result = system.move_selection_to_sibling_next(layout);
+        assert!(result, "move_selection_to_sibling_next should succeed");
+
+        // Verify that the sibling container still exists
+        assert!(sibling_container.parent(&system.tree.map).is_some(), 
+                "Sibling container should still exist in tree");
+        
+        // Verify that the children of the sibling container still exist
+        let children_count = sibling_container.children(&system.tree.map).count();
+        assert_eq!(children_count, 3, "Sibling container should have 3 children (2 original + 1 moved)");
+        
+        // Verify that window_node is now a child of sibling_container
+        assert_eq!(window_node.parent(&system.tree.map), Some(sibling_container),
+                   "Moved window should be child of sibling container");
+    }
+
+    #[test]
+    fn test_move_selection_to_sibling_prev_with_root_level_parent() {
+        // Test that moving a selection into a sibling container doesn't delete
+        // the sibling when parent is root-level (has no parent)
+        let mut system = TraditionalLayoutSystem::default();
+        let layout = system.create_layout();
+        let root = system.root(layout);
+        system.tree.data.layout.set_kind(root, LayoutKind::Horizontal);
+
+        // Create a sibling container with some windows
+        let sibling_container = system.tree.mk_node().push_back(root);
+        system.tree.data.layout.set_kind(sibling_container, LayoutKind::Vertical);
+        
+        // Add windows to the sibling container using add_window_under
+        let _child1 = system.add_window_under(layout, sibling_container, w(2));
+        let _child2 = system.add_window_under(layout, sibling_container, w(3));
+
+        // Add a window after the sibling container
+        system.add_window_after_selection(layout, w(1));
+        let window_node = system.selection(layout);
+
+        // Move the window into the sibling container
+        let result = system.move_selection_to_sibling_prev(layout);
+        assert!(result, "move_selection_to_sibling_prev should succeed");
+
+        // Verify that the sibling container still exists
+        assert!(sibling_container.parent(&system.tree.map).is_some(), 
+                "Sibling container should still exist in tree");
+        
+        // Verify that the children of the sibling container still exist
+        let children_count = sibling_container.children(&system.tree.map).count();
+        assert_eq!(children_count, 3, "Sibling container should have 3 children (2 original + 1 moved)");
+        
+        // Verify that window_node is now a child of sibling_container
+        assert_eq!(window_node.parent(&system.tree.map), Some(sibling_container),
+                   "Moved window should be child of sibling container");
+    }
+
+    #[test]
+    fn test_move_selection_to_sibling_next_with_nested_parent() {
+        // Test that the normal cleanup behavior works when parent has a parent
+        let mut system = TraditionalLayoutSystem::default();
+        let layout = system.create_layout();
+        let root = system.root(layout);
+        system.tree.data.layout.set_kind(root, LayoutKind::Horizontal);
+
+        // Create a nested parent container
+        let parent_container = system.tree.mk_node().push_back(root);
+        system.tree.data.layout.set_kind(parent_container, LayoutKind::Vertical);
+
+        // Add a window to parent_container
+        let window_node = system.add_window_under(layout, parent_container, w(1));
+
+        // Create a sibling container within parent_container
+        let sibling_container = system.tree.mk_node().push_back(parent_container);
+        system.tree.data.layout.set_kind(sibling_container, LayoutKind::Horizontal);
+        
+        let _child1 = system.add_window_under(layout, sibling_container, w(2));
+
+        // Set selection to window_node
+        system.select(window_node);
+
+        // Move the window into the sibling container
+        let result = system.move_selection_to_sibling_next(layout);
+        assert!(result, "move_selection_to_sibling_next should succeed");
+
+        // After move, parent_container has only 1 child (sibling_container)
+        // Since parent_container has a parent (root), it should be removed
+        // and sibling_container should be promoted to root
+        assert_eq!(sibling_container.parent(&system.tree.map), Some(root),
+                   "Sibling container should be promoted to root");
+        
+        // Verify that window_node is in sibling_container
+        assert_eq!(window_node.parent(&system.tree.map), Some(sibling_container),
+                   "Moved window should be child of sibling container");
+    }
+
+    #[test]
+    fn test_move_selection_to_sibling_prev_with_nested_parent() {
+        // Test that the normal cleanup behavior works when parent has a parent
+        let mut system = TraditionalLayoutSystem::default();
+        let layout = system.create_layout();
+        let root = system.root(layout);
+        system.tree.data.layout.set_kind(root, LayoutKind::Horizontal);
+
+        // Create a nested parent container
+        let parent_container = system.tree.mk_node().push_back(root);
+        system.tree.data.layout.set_kind(parent_container, LayoutKind::Vertical);
+
+        // Create a sibling container within parent_container
+        let sibling_container = system.tree.mk_node().push_back(parent_container);
+        system.tree.data.layout.set_kind(sibling_container, LayoutKind::Horizontal);
+        
+        let _child1 = system.add_window_under(layout, sibling_container, w(2));
+
+        // Add a window after sibling_container
+        let window_node = system.add_window_under(layout, parent_container, w(1));
+
+        // Set selection to window_node
+        system.select(window_node);
+
+        // Move the window into the sibling container
+        let result = system.move_selection_to_sibling_prev(layout);
+        assert!(result, "move_selection_to_sibling_prev should succeed");
+
+        // After move, parent_container has only 1 child (sibling_container)
+        // Since parent_container has a parent (root), it should be removed
+        // and sibling_container should be promoted to root
+        assert_eq!(sibling_container.parent(&system.tree.map), Some(root),
+                   "Sibling container should be promoted to root");
+        
+        // Verify that window_node is in sibling_container
+        assert_eq!(window_node.parent(&system.tree.map), Some(sibling_container),
+                   "Moved window should be child of sibling container");
+    }
+
+    #[test]
+    fn test_move_selection_to_sibling_with_parent_cleanup() {
+        // Test that parent containers with nested structure are properly cleaned up
+        let mut system = TraditionalLayoutSystem::default();
+        let layout = system.create_layout();
+        let root = system.root(layout);
+        system.tree.data.layout.set_kind(root, LayoutKind::Horizontal);
+
+        // Create proper structure: root -> parent_container -> [window_node, sibling_container]
+        let parent_container = system.tree.mk_node().push_back(root);
+        system.tree.data.layout.set_kind(parent_container, LayoutKind::Vertical);
+
+        let window_node = system.add_window_under(layout, parent_container, w(1));
+
+        let sibling_container = system.tree.mk_node().push_back(parent_container);
+        system.tree.data.layout.set_kind(sibling_container, LayoutKind::Horizontal);
+        let _child1 = system.add_window_under(layout, sibling_container, w(2));
+
+        // Set selection to window_node
+        system.select(window_node);
+
+        // Move the window into sibling_container - parent_container now has 1 child
+        let result = system.move_selection_to_sibling_next(layout);
+        assert!(result, "move_selection_to_sibling_next should succeed");
+
+        // parent_container should be removed and sibling_container promoted
+        assert_eq!(sibling_container.parent(&system.tree.map), Some(root),
+                   "Sibling container should be promoted to root");
+        assert_eq!(window_node.parent(&system.tree.map), Some(sibling_container),
+                   "Window should be moved to sibling container");
     }
 }
