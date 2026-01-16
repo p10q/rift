@@ -312,6 +312,11 @@ comb1 = "Alt + Shift"
 # - switch_to_last_workspace
 # - next_window / prev_window            # Cycle through windows at the same level (siblings, stays within stacks)
 # - ascend / descend                     # Move up/down the container hierarchy
+# - ungroup_selection                    # Move selected window out of container to parent level
+# - ungroup_siblings                     # If container: ungroup children inside. If window: ungroup all siblings from parent
+# - group_selection                      # Wrap selected window in a new group container
+# - move_selection_to_sibling_next       # Move selected window into nearest sibling container (next)
+# - move_selection_to_sibling_prev       # Move selected window into nearest sibling container (prev)
 # - move_focus = "left"|"right"|"up"|"down"  # Spatial navigation (can cross hierarchy levels)
 # - move_node = "left"|"right"|"up"|"down"
 # - join_window = "left"|"right"|"up"|"down"
@@ -335,6 +340,15 @@ comb1 = "Alt + Shift"
 # Navigate container hierarchy
 # "Alt + U" = "ascend"    # Move selection UP to parent container
 # "Alt + I" = "descend"   # Move selection DOWN into child container
+
+# Grouping/ungrouping operations
+# "Ctrl + Meta + Shift + A" = "ungroup_selection"        # Move selected window out of container
+# "Ctrl + Meta + Shift + S" = "ungroup_siblings"         # If container: dissolve it. If window: ungroup all siblings
+# "Ctrl + Meta + Shift + G" = "group_selection"          # Wrap selection in new container
+
+# Move into sibling containers
+# "Ctrl + Meta + Shift + D" = "move_selection_to_sibling_next"
+# "Ctrl + Meta + Shift + F" = "move_selection_to_sibling_prev"
 
 # Spatial navigation (existing behavior, can cross hierarchy)
 "Alt + H" = { move_focus = "left" }

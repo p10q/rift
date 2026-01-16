@@ -1054,6 +1054,291 @@ impl LayoutSystem for TraditionalLayoutSystem {
         }
     }
 
+    fn ungroup_selection(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        // Get parent and grandparent
+        let Some(parent) = selection.parent(map) else {
+            return false;
+        };
+        let Some(_grandparent) = parent.parent(map) else {
+            return false;
+        };
+        
+        // Remember if this was locally selected in parent
+        let was_selected = self.tree.data.selection.local_selection(map, parent) == Some(selection);
+        
+        // Detach from parent and attach to grandparent (after parent)
+        selection.detach(&mut self.tree).insert_after(parent);
+        
+        // If parent now has fewer than 2 children, remove it
+        let parent_children_count = parent.children(&self.tree.map).count();
+        if parent_children_count == 1 {
+            self.remove_unnecessary_container_internal(parent);
+        } else if parent_children_count == 0 {
+            parent.detach(&mut self.tree).remove();
+        }
+        
+        // Keep selection on the moved node
+        if was_selected {
+            self.select(selection);
+        }
+        
+        true
+    }
+
+    fn move_selection_to_sibling_next(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        let Some(parent) = selection.parent(map) else {
+            return false;
+        };
+        
+        // Try to find the next sibling container
+        let mut target_sibling = None;
+        let mut current = selection;
+        
+        // First, try next sibling
+        while let Some(next) = current.next_sibling(map) {
+            // Check if next is a container (has children)
+            if next.first_child(map).is_some() && self.window_at(next).is_none() {
+                target_sibling = Some(next);
+                break;
+            }
+            current = next;
+        }
+        
+        // If no next sibling container found, try previous siblings
+        if target_sibling.is_none() {
+            current = selection;
+            while let Some(prev) = current.prev_sibling(map) {
+                if prev.first_child(map).is_some() && self.window_at(prev).is_none() {
+                    target_sibling = Some(prev);
+                    break;
+                }
+                current = prev;
+            }
+        }
+        
+        // If we found a target sibling container
+        if let Some(sibling) = target_sibling {
+            // Remember if this was locally selected
+            let was_selected = self.tree.data.selection.local_selection(map, parent) == Some(selection);
+            
+            // Detach and move into the sibling container
+            selection.detach(&mut self.tree).push_back(sibling);
+            
+            // Update selection
+            if was_selected {
+                self.select(selection);
+            }
+            
+            // Clean up parent if it's now empty or has only one child
+            let parent_children_count = parent.children(&self.tree.map).count();
+            if parent_children_count == 1 {
+                self.remove_unnecessary_container_internal(parent);
+            } else if parent_children_count == 0 {
+                parent.detach(&mut self.tree).remove();
+            }
+            
+            return true;
+        }
+        
+        false
+    }
+
+    fn move_selection_to_sibling_prev(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        let Some(parent) = selection.parent(map) else {
+            return false;
+        };
+        
+        // Try to find the previous sibling container
+        let mut target_sibling = None;
+        let mut current = selection;
+        
+        // First, try previous sibling
+        while let Some(prev) = current.prev_sibling(map) {
+            // Check if prev is a container (has children)
+            if prev.first_child(map).is_some() && self.window_at(prev).is_none() {
+                target_sibling = Some(prev);
+                break;
+            }
+            current = prev;
+        }
+        
+        // If no previous sibling container found, try next siblings
+        if target_sibling.is_none() {
+            current = selection;
+            while let Some(next) = current.next_sibling(map) {
+                if next.first_child(map).is_some() && self.window_at(next).is_none() {
+                    target_sibling = Some(next);
+                    break;
+                }
+                current = next;
+            }
+        }
+        
+        // If we found a target sibling container
+        if let Some(sibling) = target_sibling {
+            // Remember if this was locally selected
+            let was_selected = self.tree.data.selection.local_selection(map, parent) == Some(selection);
+            
+            // Detach and move into the sibling container
+            selection.detach(&mut self.tree).push_back(sibling);
+            
+            // Update selection
+            if was_selected {
+                self.select(selection);
+            }
+            
+            // Clean up parent if it's now empty or has only one child
+            let parent_children_count = parent.children(&self.tree.map).count();
+            if parent_children_count == 1 {
+                self.remove_unnecessary_container_internal(parent);
+            } else if parent_children_count == 0 {
+                parent.detach(&mut self.tree).remove();
+            }
+            
+            return true;
+        }
+        
+        false
+    }
+
+    fn group_selection(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        let Some(parent) = selection.parent(map) else {
+            return false;
+        };
+        
+        // Get the parent's layout kind to use for the new container
+        let parent_layout = self.layout(parent);
+        
+        // Remember if this was locally selected
+        let was_selected = self.tree.data.selection.local_selection(map, parent) == Some(selection);
+        
+        // Create a new container node and insert it where the selection is
+        let container = self.tree.mk_node().insert_before(selection);
+        
+        // Set the container's layout kind to match the parent
+        self.tree.data.layout.set_kind(container, parent_layout);
+        
+        // Inherit the size from the selection
+        self.tree.data.layout.assume_size_of(container, selection, &self.tree.map);
+        
+        // Move the selection into the new container
+        selection.detach(&mut self.tree).push_back(container);
+        
+        // Keep selection on the moved node
+        if was_selected {
+            self.select(selection);
+        }
+        
+        true
+    }
+
+    fn ungroup_siblings(&mut self, layout: LayoutId) -> bool {
+        let selection = self.selection(layout);
+        let map = &self.tree.map;
+        
+        // Check if selection is a container (has children but no window)
+        let is_container = selection.first_child(map).is_some() && self.window_at(selection).is_none();
+        
+        if is_container {
+            // Ungroup children inside the selected container
+            let children: Vec<_> = selection.children(map).collect();
+            if children.is_empty() {
+                return false;
+            }
+            
+            let Some(parent) = selection.parent(map) else {
+                return false;
+            };
+            
+            // Remember which child was locally selected inside the container
+            let locally_selected = self.tree.data.selection.local_selection(map, selection);
+            
+            // Move all children to the parent level (where the container was)
+            // Insert first child before the container to establish position
+            if let Some(first_child) = children.first() {
+                first_child.detach(&mut self.tree).insert_before(selection);
+                
+                // Insert remaining children after the first one
+                let mut last_inserted = *first_child;
+                for child in children.iter().skip(1) {
+                    child.detach(&mut self.tree).insert_after(last_inserted);
+                    last_inserted = *child;
+                }
+            }
+            
+            // Update local selection in parent if needed
+            let was_selected_locally = self.tree.data.selection.local_selection(&self.tree.map, parent) == Some(selection);
+            
+            // Remove the now-empty container
+            selection.detach(&mut self.tree).remove();
+            
+            // Restore selection if one was selected, otherwise select first child
+            if let Some(sel) = locally_selected {
+                self.select(sel);
+            } else if let Some(first) = children.first() {
+                self.select(*first);
+                // If the container was locally selected in parent, update to first child
+                if was_selected_locally {
+                    self.tree.data.selection.select_locally(&self.tree.map, parent);
+                }
+            }
+            
+            true
+        } else {
+            // Original behavior: ungroup all siblings from the parent
+            let Some(parent) = selection.parent(map) else {
+                return false;
+            };
+            let Some(_grandparent) = parent.parent(map) else {
+                return false;
+            };
+            
+            // Collect all siblings (including the selection)
+            let siblings: Vec<_> = parent.children(map).collect();
+            if siblings.is_empty() {
+                return false;
+            }
+            
+            // Remember which child was locally selected
+            let locally_selected = self.tree.data.selection.local_selection(map, parent);
+            
+            // Move all siblings to grandparent level (where the parent was)
+            // Insert first sibling before the parent to establish position
+            if let Some(first_sibling) = siblings.first() {
+                first_sibling.detach(&mut self.tree).insert_before(parent);
+                
+                // Insert remaining siblings after the first one
+                let mut last_inserted = *first_sibling;
+                for sibling in siblings.iter().skip(1) {
+                    sibling.detach(&mut self.tree).insert_after(last_inserted);
+                    last_inserted = *sibling;
+                }
+            }
+            
+            // Remove the now-empty parent
+            parent.detach(&mut self.tree).remove();
+            
+            // Restore selection if one was selected
+            if let Some(sel) = locally_selected {
+                self.select(sel);
+            }
+            
+            true
+        }
+    }
+
     fn resize_selection_by(&mut self, layout: LayoutId, amount: f64) {
         let selection = self.selection(layout);
         if let Some(_focused_window) = self.window_at(selection) {

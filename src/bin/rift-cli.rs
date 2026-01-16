@@ -176,6 +176,16 @@ enum LayoutCommands {
     Ascend,
     /// Move selection down the tree
     Descend,
+    /// Move selected window out of its container to parent level
+    UngroupSelection,
+    /// If selection is a container: ungroup its children. If window: ungroup all siblings from parent
+    UngroupSiblings,
+    /// Wrap selected window/container in a new group container
+    GroupSelection,
+    /// Move selected window/container into nearest sibling container (next direction)
+    MoveSelectionToSiblingNext,
+    /// Move selected window/container into nearest sibling container (prev direction)
+    MoveSelectionToSiblingPrev,
     /// Move the selected node in a direction
     MoveNode { direction: String },
     /// Join the selected window with neighbor in a direction
@@ -569,6 +579,11 @@ fn map_layout_command(cmd: LayoutCommands) -> Result<RiftCommand, String> {
     match cmd {
         LayoutCommands::Ascend => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::Ascend))),
         LayoutCommands::Descend => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::Descend))),
+        LayoutCommands::UngroupSelection => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::UngroupSelection))),
+        LayoutCommands::UngroupSiblings => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::UngroupSiblings))),
+        LayoutCommands::GroupSelection => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::GroupSelection))),
+        LayoutCommands::MoveSelectionToSiblingNext => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::MoveSelectionToSiblingNext))),
+        LayoutCommands::MoveSelectionToSiblingPrev => Ok(RiftCommand::Reactor(reactor::Command::Layout(LC::MoveSelectionToSiblingPrev))),
         LayoutCommands::MoveNode { direction } => Ok(RiftCommand::Reactor(
             reactor::Command::Layout(LC::MoveNode(direction.into())),
         )),

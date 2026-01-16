@@ -663,6 +663,135 @@ impl LayoutSystem for BspLayoutSystem {
         false
     }
 
+    fn ungroup_selection(&mut self, layout: LayoutId) -> bool {
+        // For BSP, this is similar to moving the leaf up one level
+        let Some(sel) = self.selection_of_layout(layout) else {
+            return false;
+        };
+        let sel_leaf = self.descend_to_leaf(sel);
+        
+        let Some(parent) = sel_leaf.parent(&self.tree.map) else {
+            return false;
+        };
+        let Some(_grandparent) = parent.parent(&self.tree.map) else {
+            return false;
+        };
+        
+        // Detach leaf and attach to grandparent
+        sel_leaf.detach(&mut self.tree).insert_after(parent);
+        
+        // Clean up parent if needed
+        let parent_children: Vec<_> = parent.children(&self.tree.map).collect();
+        if parent_children.len() == 1 {
+            if let Some(remaining_child) = parent_children.first() {
+                remaining_child.detach(&mut self.tree).insert_after(parent);
+            }
+            parent.detach(&mut self.tree).remove();
+        }
+        
+        self.tree.data.selection.select(&self.tree.map, sel_leaf);
+        true
+    }
+
+    fn move_selection_to_sibling_next(&mut self, _layout: LayoutId) -> bool {
+        // For BSP, this operation doesn't map as cleanly
+        // Could implement as moving to next sibling's subtree
+        // For now, return false (not supported in BSP mode)
+        false
+    }
+
+    fn move_selection_to_sibling_prev(&mut self, _layout: LayoutId) -> bool {
+        // For BSP, this operation doesn't map as cleanly
+        // For now, return false (not supported in BSP mode)
+        false
+    }
+
+    fn group_selection(&mut self, _layout: LayoutId) -> bool {
+        // For BSP, grouping a single node doesn't fit the binary structure
+        // Return false (not supported in BSP mode)
+        false
+    }
+
+    fn ungroup_siblings(&mut self, layout: LayoutId) -> bool {
+        let Some(sel) = self.selection_of_layout(layout) else {
+            return false;
+        };
+        
+        // Check if selection is a split/container (not a leaf)
+        let is_container = matches!(self.kind.get(sel), Some(NodeKind::Split { .. }));
+        
+        if is_container {
+            // Ungroup children inside the selected container
+            let children: Vec<_> = sel.children(&self.tree.map).collect();
+            if children.is_empty() {
+                return false;
+            }
+            
+            let Some(_parent) = sel.parent(&self.tree.map) else {
+                return false;
+            };
+            
+            // Move all children to the parent level (where the container was)
+            // Insert first child before the container to establish position
+            if let Some(first_child) = children.first() {
+                first_child.detach(&mut self.tree).insert_before(sel);
+                
+                // Insert remaining children after the first one
+                let mut last_inserted = *first_child;
+                for child in children.iter().skip(1) {
+                    child.detach(&mut self.tree).insert_after(last_inserted);
+                    last_inserted = *child;
+                }
+            }
+            
+            // Remove the now-empty container
+            sel.detach(&mut self.tree).remove();
+            
+            // Select the first child
+            if let Some(first) = children.first() {
+                self.tree.data.selection.select(&self.tree.map, *first);
+            }
+            
+            true
+        } else {
+            // Original behavior: ungroup all siblings from the parent
+            let sel_leaf = self.descend_to_leaf(sel);
+            
+            let Some(parent) = sel_leaf.parent(&self.tree.map) else {
+                return false;
+            };
+            let Some(_grandparent) = parent.parent(&self.tree.map) else {
+                return false;
+            };
+            
+            // Collect all siblings
+            let siblings: Vec<_> = parent.children(&self.tree.map).collect();
+            if siblings.is_empty() {
+                return false;
+            }
+            
+            // Move all siblings to grandparent level (where the parent was)
+            // Insert first sibling before the parent to establish position
+            if let Some(first_sibling) = siblings.first() {
+                first_sibling.detach(&mut self.tree).insert_before(parent);
+                
+                // Insert remaining siblings after the first one
+                let mut last_inserted = *first_sibling;
+                for sibling in siblings.iter().skip(1) {
+                    sibling.detach(&mut self.tree).insert_after(last_inserted);
+                    last_inserted = *sibling;
+                }
+            }
+            
+            // Remove the now-empty parent
+            parent.detach(&mut self.tree).remove();
+            
+            // Keep selection on the original leaf
+            self.tree.data.selection.select(&self.tree.map, sel_leaf);
+            true
+        }
+    }
+
     fn move_focus(
         &mut self,
         layout: LayoutId,

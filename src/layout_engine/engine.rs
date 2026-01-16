@@ -37,6 +37,11 @@ pub enum LayoutCommand {
     MoveFocus(#[serde(rename = "direction")] Direction),
     Ascend,
     Descend,
+    UngroupSelection,
+    UngroupSiblings,
+    GroupSelection,
+    MoveSelectionToSiblingNext,
+    MoveSelectionToSiblingPrev,
     MoveNode(Direction),
 
     JoinWindow(Direction),
@@ -1049,6 +1054,46 @@ impl LayoutEngine {
             }
             LayoutCommand::Descend => {
                 self.tree.descend_selection(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::UngroupSelection => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
+                self.tree.ungroup_selection(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::UngroupSiblings => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
+                self.tree.ungroup_siblings(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::GroupSelection => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
+                self.tree.group_selection(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::MoveSelectionToSiblingNext => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
+                self.tree.move_selection_to_sibling_next(layout);
+                EventResponse::default()
+            }
+            LayoutCommand::MoveSelectionToSiblingPrev => {
+                if is_floating {
+                    return EventResponse::default();
+                }
+                self.workspace_layouts.mark_last_saved(space, workspace_id, layout);
+                self.tree.move_selection_to_sibling_prev(layout);
                 EventResponse::default()
             }
             LayoutCommand::MoveNode(direction) => {
