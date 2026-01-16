@@ -1,0 +1,219 @@
+# Rift Window Manager Configuration
+# Location: ~/.config/rift/config.toml
+
+# ==============================================================================
+# SETTINGS
+# ==============================================================================
+
+[settings]
+animate = true
+animation_duration = 0.2
+animation_fps = 100.0
+hot_reload = true
+default_disable = false
+mouse_follows_focus = false
+mouse_hides_on_focus = false
+focus_follows_mouse = false
+
+# ==============================================================================
+# LAYOUT
+# ==============================================================================
+
+[settings.layout]
+mode = "traditional"
+
+[settings.layout.stack]
+stack_offset = 100.0
+default_orientation = "perpendicular"
+
+[settings.layout.gaps.outer]
+top = 10.0
+left = 10.0
+bottom = 10.0
+right = 10.0
+
+[settings.layout.gaps.inner]
+horizontal = 10.0
+vertical = 10.0
+
+# ==============================================================================
+# UI
+# ==============================================================================
+
+[settings.ui.menu_bar]
+enabled = true
+show_empty = false
+mode = "all"
+active_label = "index"
+display_style = "layout"
+
+[settings.ui.mission_control]
+enabled = true
+fade_enabled = true
+fade_duration_ms = 150.0
+
+# ==============================================================================
+# GESTURES
+# ==============================================================================
+
+[settings.gestures]
+enabled = true
+invert_horizontal_swipe = false
+swipe_vertical_tolerance = 50.0
+skip_empty = false
+fingers = 3
+distance_pct = 0.3
+haptics_enabled = true
+haptic_pattern = "level_change"
+
+# ==============================================================================
+# WINDOW SNAPPING
+# ==============================================================================
+
+[settings.window_snapping]
+drag_swap_fraction = 0.5
+
+# ==============================================================================
+# VIRTUAL WORKSPACES
+# ==============================================================================
+
+[virtual_workspaces]
+enabled = true
+default_workspace_count = 5
+auto_assign_windows = true
+preserve_focus_per_workspace = true
+workspace_auto_back_and_forth = true
+default_workspace = 0
+reapply_app_rules_on_title_change = false
+
+workspace_names = [
+    "Main",
+    "Code",
+    "Browser",
+    "Chat",
+    "Media"
+]
+
+app_rules = [
+    { app_id = "com.apple.systempreferences", floating = true },
+    { app_id = "com.apple.SystemPreferences", floating = true },
+    { app_id = "com.apple.calculator", floating = true },
+    { app_id = "com.apple.Spotlight", floating = true },
+]
+
+# ==============================================================================
+# MODIFIER COMBINATIONS
+# ==============================================================================
+
+[modifier_combinations]
+ctrl = "Ctrl"
+wm = "Ctrl + Cmd"
+wm_shift = "Ctrl + Cmd + Shift"
+wm_alt = "Ctrl + Alt + Cmd"
+
+# ==============================================================================
+# KEYBINDINGS
+# ==============================================================================
+
+[keys]
+
+# ------------------------------------------------------------------------------
+# Toggle Rift on/off for current space
+# ------------------------------------------------------------------------------
+"wm + Z" = "toggle_space_activated"
+
+# ------------------------------------------------------------------------------
+# Focus navigation - HJKL (vim-style)
+# ------------------------------------------------------------------------------
+"ctrl + H" = { move_focus = "left" }
+"ctrl + J" = { move_focus = "down" }
+"ctrl + K" = { move_focus = "up" }
+"ctrl + L" = { move_focus = "right" }
+
+# ------------------------------------------------------------------------------
+# Move windows - Arrow keys
+# ------------------------------------------------------------------------------
+"wm + H" = { move_node = "left" }
+"wm + J" = { move_node = "down" }
+"wm + K" = { move_node = "up" }
+"wm + L" = { move_node = "right" }
+
+# ------------------------------------------------------------------------------
+# Join windows - Arrow keys
+# ------------------------------------------------------------------------------
+"wm_shift + H" = { join_window = "left" }
+"wm_shift + J" = { join_window = "down" }
+"wm_shift + K" = { join_window = "up" }
+"wm_shift + L" = { join_window = "right" }
+
+# ------------------------------------------------------------------------------
+# Workspaces - Switch
+# ------------------------------------------------------------------------------
+"wm + 1" = { switch_to_workspace = 1 }
+"wm + 2" = { switch_to_workspace = 2 }
+"wm + 3" = { switch_to_workspace = 3 }
+"wm + 4" = { switch_to_workspace = 4 }
+"wm + 5" = { switch_to_workspace = 5 }
+"wm + 6" = { switch_to_workspace = 6 }
+"wm + 7" = { switch_to_workspace = 7 }
+"wm + 8" = { switch_to_workspace = 8 }
+"wm + 9" = { switch_to_workspace = 9 }
+
+# ------------------------------------------------------------------------------
+# Workspaces - Move window to workspace
+# ------------------------------------------------------------------------------
+"wm_shift + 1" = { move_window_to_workspace = 1 }
+"wm_shift + 2" = { move_window_to_workspace = 2 }
+"wm_shift + 3" = { move_window_to_workspace = 3 }
+"wm_shift + 4" = { move_window_to_workspace = 4 }
+"wm_shift + 5" = { move_window_to_workspace = 5 }
+"wm_shift + 6" = { move_window_to_workspace = 6 }
+"wm_shift + 7" = { move_window_to_workspace = 7 }
+"wm_shift + 8" = { move_window_to_workspace = 8 }
+"wm_shift + 9" = { move_window_to_workspace = 9 }
+
+# ------------------------------------------------------------------------------
+# Workspaces - Navigation
+# ------------------------------------------------------------------------------
+"wm + BracketLeft" = "prev_workspace"
+"wm + BracketRight" = "next_workspace"
+"wm + Tab" = "switch_to_last_workspace"
+
+# ------------------------------------------------------------------------------
+# Layout controls
+# ------------------------------------------------------------------------------
+"wm + S" = "toggle_stack"
+"wm + V" = "toggle_orientation"
+"wm + F" = "toggle_fullscreen"
+"wm + G" = "toggle_fullscreen_within_gaps"
+"wm + T" = "toggle_window_floating"
+"wm + Space" = "toggle_focus_floating"
+
+# ------------------------------------------------------------------------------
+# Resize
+# ------------------------------------------------------------------------------
+"wm + Equal" = "resize_window_grow"
+"wm + Minus" = "resize_window_shrink"
+
+# ------------------------------------------------------------------------------
+# Window cycling
+# ------------------------------------------------------------------------------
+"wm + N" = "next_window"
+"wm + P" = "prev_window"
+
+# ------------------------------------------------------------------------------
+# Tree navigation
+# ------------------------------------------------------------------------------
+"wm + A" = "ascend"
+"wm + D" = "descend"
+
+# ------------------------------------------------------------------------------
+# Mission Control
+# ------------------------------------------------------------------------------
+"wm + M" = "show_mission_control_all"
+"wm + Comma" = "show_mission_control_current"
+
+# ------------------------------------------------------------------------------
+# Utility
+# ------------------------------------------------------------------------------
+"wm + R" = "debug"
