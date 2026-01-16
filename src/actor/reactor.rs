@@ -44,7 +44,7 @@ use crate::actor::app::{AppInfo, AppThreadHandle, Quiet, Request, WindowId, Wind
 use crate::actor::broadcast::{BroadcastEvent, BroadcastSender};
 use crate::actor::raise_manager::{self, RaiseManager, RaiseRequest};
 use crate::actor::reactor::events::window_discovery::WindowDiscoveryHandler;
-use crate::actor::{self, menu_bar, stack_line};
+use crate::actor::{self, corner_indicator, menu_bar, stack_line};
 use crate::common::collections::{BTreeMap, HashMap, HashSet};
 use crate::common::config::Config;
 use crate::common::log::MetricsCommand;
@@ -469,6 +469,7 @@ impl Reactor {
         broadcast_tx: BroadcastSender,
         menu_tx: menu_bar::Sender,
         stack_line_tx: stack_line::Sender,
+        corner_indicator_tx: corner_indicator::Sender,
         window_notify: Option<(crate::actor::window_notify::Sender, WindowTxStore)>,
         one_space: bool,
         debug_mode: bool,
@@ -490,6 +491,7 @@ impl Reactor {
                 reactor.communication_manager.event_tap_tx = Some(event_tap_tx);
                 reactor.menu_manager.menu_tx = Some(menu_tx);
                 reactor.communication_manager.stack_line_tx = Some(stack_line_tx);
+                reactor.communication_manager.corner_indicator_tx = Some(corner_indicator_tx);
                 reactor.communication_manager.events_tx = Some(events_tx_clone.clone());
                 Executor::run(reactor.run(events, events_tx_clone));
             })
@@ -554,6 +556,7 @@ impl Reactor {
             communication_manager: managers::CommunicationManager {
                 event_tap_tx: None,
                 stack_line_tx: None,
+                corner_indicator_tx: None,
                 raise_manager_tx,
                 event_broadcaster: broadcast_tx,
                 wm_sender: None,

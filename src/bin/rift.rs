@@ -13,6 +13,7 @@ use rift_wm::actor::mission_control_observer::NativeMissionControl;
 use rift_wm::actor::notification_center::NotificationCenter;
 use rift_wm::actor::process::ProcessActor;
 use rift_wm::actor::reactor::{self, Reactor};
+use rift_wm::actor::corner_indicator::CornerIndicator;
 use rift_wm::actor::stack_line::StackLine;
 use rift_wm::actor::window_notify as window_notify_actor;
 use rift_wm::actor::wm_controller::{self, WmController};
@@ -157,6 +158,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
     let (event_tap_tx, event_tap_rx) = rift_wm::actor::channel();
     let (menu_tx, menu_rx) = rift_wm::actor::channel();
     let (stack_line_tx, stack_line_rx) = rift_wm::actor::channel();
+    let (corner_indicator_tx, corner_indicator_rx) = rift_wm::actor::channel();
     let (wnd_tx, wnd_rx) = rift_wm::actor::channel();
     let window_tx_store = WindowTxStore::new();
     let events_tx = Reactor::spawn(
@@ -167,6 +169,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
         broadcast_tx.clone(),
         menu_tx.clone(),
         stack_line_tx.clone(),
+        corner_indicator_tx.clone(),
         Some((wnd_tx.clone(), window_tx_store.clone())),
         opt.one,
         opt.debug,
@@ -253,6 +256,13 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
         events_tx.clone(),
         CoordinateConverter::default(),
     );
+    let corner_indicator = CornerIndicator::new(
+        config.clone(),
+        corner_indicator_rx,
+        mtm,
+        events_tx.clone(),
+        CoordinateConverter::default(),
+    );
 
     let mission_control = MissionControlActor::new(config.clone(), mc_rx, events_tx.clone(), mtm);
     let mission_control_native = NativeMissionControl::new(events_tx.clone(), mc_native_rx);
@@ -272,6 +282,7 @@ Enable it in System Settings > Desktop & Dock (Mission Control) and restart Rift
             event_tap.run(),
             menu.run(),
             stack_line.run(),
+            corner_indicator.run(),
             wn_actor.run(),
             mission_control_native.run(),
             mission_control.run(),

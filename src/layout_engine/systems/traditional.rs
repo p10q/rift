@@ -1278,6 +1278,50 @@ impl TraditionalLayoutSystem {
         out
     }
 
+    /// Get the frame of the currently selected node (container or window)
+    pub(crate) fn get_selected_container_frame(
+        &self,
+        layout: LayoutId,
+        screen: CGRect,
+        _stack_offset: f64,
+        gaps: &crate::common::config::GapSettings,
+        _stack_line_thickness: f64,
+        _stack_line_horiz: crate::common::config::HorizontalPlacement,
+        _stack_line_vert: crate::common::config::VerticalPlacement,
+    ) -> Option<CGRect> {
+        let map = &self.tree.map;
+        let tiling_area = compute_tiling_area(screen, gaps);
+
+        let mut node = self.root(layout);
+        let mut rect = tiling_area;
+
+        // Walk down the selection path to the current selection
+        loop {
+            let selection = self.tree.data.selection.local_selection(map, node);
+            let Some(sel) = selection else {
+                break;
+            };
+
+            // Calculate the frame of this selected child within its parent
+            rect = self.calculate_child_frame_in_container(node, sel, rect, gaps);
+
+            // If the selection is a container (has children), return its frame
+            if sel.children(map).next().is_some() {
+                return Some(rect);
+            }
+
+            // If it's a leaf window, also return its frame
+            if self.window_at(sel).is_some() {
+                return Some(rect);
+            }
+
+            // Continue down the tree
+            node = sel;
+        }
+
+        None
+    }
+
     fn calculate_child_frame_in_axis(
         &self,
         parent_rect: CGRect,

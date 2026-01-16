@@ -16,7 +16,7 @@ use crate::actor::broadcast::BroadcastSender;
 use crate::actor::drag_swap::DragManager as DragSwapManager;
 use crate::actor::reactor::Reactor;
 use crate::actor::reactor::animation::AnimationManager;
-use crate::actor::{event_tap, menu_bar, raise_manager, stack_line, window_notify, wm_controller};
+use crate::actor::{corner_indicator, event_tap, menu_bar, raise_manager, stack_line, window_notify, wm_controller};
 use crate::common::collections::{HashMap, HashSet};
 use crate::common::config::WindowSnappingSettings;
 use crate::layout_engine::LayoutEngine;
@@ -175,6 +175,7 @@ pub struct RefocusManager {
 pub struct CommunicationManager {
     pub event_tap_tx: Option<event_tap::Sender>,
     pub stack_line_tx: Option<stack_line::Sender>,
+    pub corner_indicator_tx: Option<corner_indicator::Sender>,
     pub raise_manager_tx: raise_manager::Sender,
     pub event_broadcaster: BroadcastSender,
     pub wm_sender: Option<wm_controller::Sender>,
@@ -308,6 +309,46 @@ impl LayoutManager {
                         {
                             tracing::warn!("Failed to send groups update to stack_line: {}", e);
                         }
+                    }
+                }
+            }
+
+            // Handle corner_indicator
+            if let Some(tx) = &reactor.communication_manager.corner_indicator_tx {
+                let screen = reactor.space_manager.screen_by_space(space);
+                if let Some(screen) = screen {
+                    let display_uuid = if screen.display_uuid.is_empty() {
+                        None
+                    } else {
+                        Some(screen.display_uuid.as_str())
+                    };
+                    let gaps =
+                        reactor.config.settings.layout.gaps.effective_for_display(display_uuid);
+                    
+                    let container_frame = reactor
+                        .layout_manager
+                        .layout_engine
+                        .get_selected_container_frame(
+                            space,
+                            screen.frame,
+                            &gaps,
+                            reactor.config.settings.ui.stack_line.thickness(),
+                            reactor.config.settings.ui.stack_line.horiz_placement,
+                            reactor.config.settings.ui.stack_line.vert_placement,
+                        );
+
+                    let container = container_frame.map(|frame| corner_indicator::ContainerSelection {
+                        space_id: space,
+                        frame,
+                    });
+
+                    if let Err(e) =
+                        tx.try_send(corner_indicator::Event::SelectionUpdated {
+                            space_id: space,
+                            container,
+                        })
+                    {
+                        tracing::warn!("Failed to send selection update to corner_indicator: {}", e);
                     }
                 }
             }

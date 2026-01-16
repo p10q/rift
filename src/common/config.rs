@@ -382,6 +382,8 @@ pub struct UiSettings {
     pub stack_line: StackLineSettings,
     #[serde(default)]
     pub mission_control: MissionControlSettings,
+    /// Enable visual corner indicators for selected nodes (windows and containers)
+    pub corner_indicator_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]

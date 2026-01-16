@@ -149,6 +149,12 @@ thickness = 0.0
 # spacing between the stack line and window edges (in px)
 spacing = 0.0
 
+# Corner indicators for selected nodes (windows and containers)
+# Show four blue dots at the corners of the currently selected window or container
+# Helps visualize what is currently selected in the layout tree
+# Enabled by default; set to false to disable
+#corner_indicator_enabled = true
+
 # experimental mission control
 [settings.ui.mission_control]
 enabled = false

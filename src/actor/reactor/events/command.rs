@@ -4,6 +4,7 @@ use super::super::Screen;
 use crate::actor::app::{AppThreadHandle, Quiet, WindowId};
 use crate::actor::reactor::transaction_manager::TransactionId;
 use crate::actor::reactor::{DisplaySelector, Reactor, WorkspaceSwitchOrigin};
+use crate::actor::corner_indicator::Event as CornerIndicatorEvent;
 use crate::actor::stack_line::Event as StackLineEvent;
 use crate::actor::wm_controller::WmEvent;
 use crate::actor::{menu_bar, raise_manager};
@@ -137,6 +138,12 @@ impl CommandEventHandler {
         if let Some(tx) = &reactor.communication_manager.stack_line_tx {
             if let Err(e) = tx.try_send(StackLineEvent::ConfigUpdated(reactor.config.clone())) {
                 warn!("Failed to send config update to stack line: {}", e);
+            }
+        }
+
+        if let Some(tx) = &reactor.communication_manager.corner_indicator_tx {
+            if let Err(e) = tx.try_send(CornerIndicatorEvent::ConfigUpdated(reactor.config.clone())) {
+                warn!("Failed to send config update to corner indicator: {}", e);
             }
         }
 
